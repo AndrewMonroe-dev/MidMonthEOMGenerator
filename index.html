@@ -61,6 +61,8 @@ textarea{resize:vertical; min-height:60px;}
 .initiative-editor input, .initiative-editor textarea{margin-bottom:4px;}
 
 .imgpreview{max-width:100%; border:1px solid var(--border); border-radius:6px; margin-top:6px;}
+#pasteZone{border:2px dashed var(--border); border-radius:6px; padding:14px; text-align:center; font-size:12px; color:var(--text-light); cursor:pointer; background:#fdfcfa; margin-bottom:4px;}
+#pasteZone:focus{outline:2px solid var(--gold); border-color:var(--gold); color:var(--brown-dark);}
 .hint{font-size:11px; color:var(--text-light); margin-top:4px; line-height:1.5;}
 
 .preview-wrap{padding:2rem 1.5rem; overflow-y:auto;}
@@ -201,10 +203,21 @@ Core Portfolio	178	163	213	(35)	(16%)	734	916	839	(106)	(13%)
     <div class="section">
       <div class="section-head" onclick="toggleSection(this)">Data Snapshot Image <span>▾</span></div>
       <div class="section-body">
-        <div class="hint">Upload the screenshot from your reporting system. It will appear in the report between Brand Notes and Initiatives.</div>
+        <div class="hint">This image appears in the report between Brand Notes and Initiatives. You can also try pulling the numbers straight from it (Beta) — always double-check extracted numbers before using them.</div>
+
+        <label>Option A — Paste screenshot (Ctrl+V)</label>
+        <div id="pasteZone" tabindex="0">Click here, then press Ctrl+V to paste a copied screenshot</div>
+
+        <label>Option B — Upload file</label>
         <input type="file" id="snipInput" accept="image/*" onchange="handleImageUpload(event)">
+
         <img id="snipPreviewThumb" class="imgpreview" style="display:none;">
-        <button class="btn small danger" style="margin-top:6px; display:none;" id="clearSnipBtn" onclick="clearSnip()">Remove Image</button>
+
+        <div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap;">
+          <button class="btn small gold" id="extractBtn" style="display:none;" onclick="runOCRExtraction()">🔍 Extract Numbers (Beta)</button>
+          <button class="btn small danger" style="display:none;" id="clearSnipBtn" onclick="clearSnip()">Remove Image</button>
+        </div>
+        <div class="hint" id="ocrStatus"></div>
       </div>
     </div>
 
@@ -254,6 +267,7 @@ Core Portfolio	178	163	213	(35)	(16%)	734	916	839	(106)	(13%)
 
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.4/dist/tesseract.min.js"></script>
 <script>
 function defaultRows(){
   return [
@@ -404,25 +418,103 @@ function parsePastedData(){
   }
 }
 
+function setSnipImage(dataUrl){
+  state.snipData = dataUrl;
+  document.getElementById('snipPreviewThumb').src = dataUrl;
+  document.getElementById('snipPreviewThumb').style.display = 'block';
+  document.getElementById('clearSnipBtn').style.display = 'inline-block';
+  document.getElementById('extractBtn').style.display = 'inline-block';
+  document.getElementById('ocrStatus').textContent = '';
+  renderAll();
+}
 function handleImageUpload(e){
   const file = e.target.files[0];
   if(!file) return;
   const reader = new FileReader();
-  reader.onload = function(evt){
-    state.snipData = evt.target.result;
-    document.getElementById('snipPreviewThumb').src = state.snipData;
-    document.getElementById('snipPreviewThumb').style.display = 'block';
-    document.getElementById('clearSnipBtn').style.display = 'inline-block';
-    renderAll();
-  };
+  reader.onload = evt => setSnipImage(evt.target.result);
   reader.readAsDataURL(file);
+}
+function handleImagePasteEvent(e){
+  const items = (e.clipboardData || window.clipboardData).items;
+  for(const item of items){
+    if(item.type.indexOf('image') !== -1){
+      const blob = item.getAsFile();
+      const reader = new FileReader();
+      reader.onload = evt => setSnipImage(evt.target.result);
+      reader.readAsDataURL(blob);
+      e.preventDefault();
+      break;
+    }
+  }
 }
 function clearSnip(){
   state.snipData = null;
   document.getElementById('snipInput').value = '';
   document.getElementById('snipPreviewThumb').style.display = 'none';
   document.getElementById('clearSnipBtn').style.display = 'none';
+  document.getElementById('extractBtn').style.display = 'none';
+  document.getElementById('ocrStatus').textContent = '';
   renderAll();
+}
+
+// ══════════════════════════════════════════
+// OCR EXTRACTION (Beta) — routes results into
+// the Paste Data box for manual verification,
+// never writes directly into the live table.
+// ══════════════════════════════════════════
+const ROW_LABELS = ["Total DFW","Core Portfolio","Core Glass","Diamond Collection",
+  "The Wines of Francis Coppola","Relax","Schmitt Sohne","Transcendent Wines","Director's Cut"];
+
+async function runOCRExtraction(){
+  const statusEl = document.getElementById('ocrStatus');
+  if(typeof Tesseract === 'undefined'){
+    statusEl.textContent = "OCR engine failed to load — check your internet connection and try again.";
+    return;
+  }
+  if(!state.snipData) return;
+  statusEl.textContent = "Reading image... this can take 15–30 seconds.";
+  document.getElementById('extractBtn').disabled = true;
+  try{
+    const result = await Tesseract.recognize(state.snipData, 'eng');
+    const text = result.data.text;
+    const reconstructed = reconstructTableFromOCR(text);
+    document.getElementById('pasteBox').value = reconstructed.tsv;
+    const pasteBody = document.getElementById('pasteBox').closest('.section').querySelector('.section-body');
+    pasteBody.classList.remove('collapsed');
+    statusEl.innerHTML = `Extraction complete — <b>${reconstructed.matched} of ${ROW_LABELS.length} rows recognized.</b> Carefully check every number in the Paste Data box above before clicking "Parse &amp; Fill Table." OCR can misread digits, especially in colored or small text.`;
+  }catch(err){
+    statusEl.textContent = "Extraction failed: " + err.message + ". Try the Paste Data (Excel) method instead.";
+  }
+  document.getElementById('extractBtn').disabled = false;
+}
+
+function reconstructTableFromOCR(rawText){
+  const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
+  let matched = 0;
+  const outLines = [];
+  const norm = s => s.toLowerCase().replace(/[^a-z]/g,'');
+
+  ROW_LABELS.forEach(label => {
+    const targetNorm = norm(label).slice(0, Math.min(8, norm(label).length));
+    const foundLine = lines.find(l => norm(l).includes(targetNorm));
+    if(!foundLine){
+      outLines.push(label + "\t[not found — enter manually]");
+      return;
+    }
+    // Pull numeric tokens: handles (123), -123, 45%, (45%), 1,234
+    const tokens = foundLine.match(/\(?-?\d[\d,]*\.?\d*%?\)?/g) || [];
+    if(tokens.length >= 12){
+      // Drop the 2 computed "% Plan Achieved" columns (index 2 and 8 of the 12 raw reads)
+      const picked = [tokens[0],tokens[1],tokens[3],tokens[4],tokens[5],tokens[6],tokens[7],tokens[9],tokens[10],tokens[11]];
+      outLines.push(label + "\t" + picked.join("\t"));
+      matched++;
+    } else if(tokens.length >= 10){
+      outLines.push(label + "\t" + tokens.join("\t") + "\t[check column count — found " + tokens.length + ", expected 12]");
+    } else {
+      outLines.push(label + "\t[incomplete read — found " + tokens.length + " numbers, enter manually]");
+    }
+  });
+  return {tsv: outLines.join("\n"), matched};
 }
 
 function renderInitEditor(){
@@ -721,6 +813,12 @@ function resetAll(){
 renderBrandEditor();
 renderInitEditor();
 renderAll();
+
+const pasteZoneEl = document.getElementById('pasteZone');
+if(pasteZoneEl){
+  pasteZoneEl.addEventListener('paste', handleImagePasteEvent);
+  pasteZoneEl.addEventListener('click', () => pasteZoneEl.focus());
+}
 </script>
 </body>
 </html>
