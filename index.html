@@ -15,7 +15,7 @@
 }
 *{box-sizing:border-box; margin:0; padding:0;}
 body{font-family:'Segoe UI',Calibri,sans-serif; background:#e8e2d6; color:var(--text); font-size:14px; line-height:1.5;}
-.app{display:grid; grid-template-columns: 420px 1fr; min-height:100vh;}
+.app{display:grid; grid-template-columns: 460px 1fr; min-height:100vh;}
 @media (max-width: 1000px){ .app{grid-template-columns: 1fr;} }
 
 .panel{background:#fff; border-right:1px solid #ccc; padding:1.25rem; overflow-y:auto; max-height:100vh; position:sticky; top:0;}
@@ -51,9 +51,11 @@ textarea{resize:vertical; min-height:60px;}
 .brand-row-editor{border:1px solid var(--border); border-radius:6px; padding:8px; margin-bottom:8px; background:#fdfcfa;}
 .brand-row-editor .rowtop{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;}
 .brand-row-editor .rowtop input[type=text]{font-weight:600; flex:1; margin-right:6px;}
-.mini-grid{display:grid; grid-template-columns:repeat(6,1fr); gap:4px; margin-bottom:4px;}
-.mini-grid input{padding:3px 4px; font-size:11px;}
-.mini-label{font-size:9px; color:var(--text-light); text-align:center;}
+.mini-grid{display:grid; grid-template-columns:repeat(5,1fr); gap:4px; margin-bottom:4px;}
+.mini-grid input{padding:6px 2px; font-size:12px; text-align:center; width:100%; min-width:0;}
+.mini-grid input::-webkit-outer-spin-button, .mini-grid input::-webkit-inner-spin-button{-webkit-appearance:none; margin:0;}
+.mini-grid input[type=number]{-moz-appearance:textfield;}
+.mini-label{font-size:9.5px; color:var(--text-light); text-align:center;}
 .rowmeta{display:flex; gap:6px; align-items:center; margin-top:4px;}
 .rowmeta select{font-size:11px; padding:3px;}
 
@@ -338,7 +340,7 @@ function renderBrandEditor(){
       </div>
       <div class="mini-grid">
         <div class="mini-label">MTD Final</div><div class="mini-label">MTD Plan</div><div class="mini-label">LYMTD</div>
-        <div class="mini-label">Case Chg</div><div class="mini-label">%LY</div><div class="mini-label"></div>
+        <div class="mini-label">Case Chg</div><div class="mini-label">%LY</div>
       </div>
       <div class="mini-grid">
         <input type="number" value="${row.mtdFinal}" onchange="updateRow(${i},'mtdFinal',parseFloat(this.value)||0)">
@@ -346,11 +348,10 @@ function renderBrandEditor(){
         <input type="number" value="${row.lymtd}" onchange="updateRow(${i},'lymtd',parseFloat(this.value)||0)">
         <input type="number" value="${row.mtdCaseChg}" onchange="updateRow(${i},'mtdCaseChg',parseFloat(this.value)||0)">
         <input type="number" value="${row.mtdPctLY}" onchange="updateRow(${i},'mtdPctLY',parseFloat(this.value)||0)">
-        <div></div>
       </div>
       <div class="mini-grid">
         <div class="mini-label">YTD</div><div class="mini-label">YTD Plan</div><div class="mini-label">LYTD</div>
-        <div class="mini-label">Case Chg</div><div class="mini-label">%LY</div><div class="mini-label"></div>
+        <div class="mini-label">Case Chg</div><div class="mini-label">%LY</div>
       </div>
       <div class="mini-grid">
         <input type="number" value="${row.ytd}" onchange="updateRow(${i},'ytd',parseFloat(this.value)||0)">
@@ -358,7 +359,6 @@ function renderBrandEditor(){
         <input type="number" value="${row.lytd}" onchange="updateRow(${i},'lytd',parseFloat(this.value)||0)">
         <input type="number" value="${row.ytdCaseChg}" onchange="updateRow(${i},'ytdCaseChg',parseFloat(this.value)||0)">
         <input type="number" value="${row.ytdPctLY}" onchange="updateRow(${i},'ytdPctLY',parseFloat(this.value)||0)">
-        <div></div>
       </div>
       <div class="rowmeta">
         <select onchange="updateRow(${i},'type',this.value)">
