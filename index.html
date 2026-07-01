@@ -247,7 +247,7 @@ Core Portfolio	178	163	213	(35)	(16%)	734	916	839	(106)	(13%)
 
   <div class="preview-wrap">
     <div class="toolbar">
-      <button class="btn gold" onclick="copyFormatted()">📋 Copy Formatted Report</button>
+      <button class="btn gold" onclick="copyFormatted()">📋 Copy as Image + Open Outlook</button>
       <button class="btn outline" onclick="window.print()">🖨️ Print / Save PDF</button>
       <button class="btn" onclick="saveReportToFile()">💾 Save Report (.json)</button>
       <button class="btn outline" onclick="document.getElementById('loadFileInput').click()">📂 Load Report</button>
@@ -262,6 +262,7 @@ Core Portfolio	178	163	213	(35)	(16%)	734	916	839	(106)	(13%)
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.4/dist/tesseract.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
 function defaultRows(){
   return [
@@ -694,169 +695,47 @@ function restoreEditableFields(){
 }
 
 async function copyFormatted(){
-
-  const reportEl = document.getElementById('reportRoot');
-  const clone = reportEl.cloneNode(true);
   const status = document.getElementById('copyStatus');
+  const reportEl = document.getElementById('reportRoot');
 
-  clone.querySelectorAll('[contenteditable]').forEach(el => {
-    el.removeAttribute('contenteditable');
-  });
-
-  clone.querySelectorAll('.kpigrid').forEach(el => {
-
-    const cards = [...el.children];
-
-    const table = document.createElement('table');
-    table.setAttribute('role', 'presentation');
-    table.style.width = '100%';
-    table.style.borderCollapse = 'separate';
-    table.style.borderSpacing = '10px';
-
-    const row = document.createElement('tr');
-
-    cards.forEach(card => {
-
-      const td = document.createElement('td');
-
-      td.style.width = '33.3%';
-      td.style.verticalAlign = 'top';
-
-      card.style.background = '#FFFFFF';
-      card.style.border = '1px solid #DDD0BB';
-      card.style.padding = '14px';
-      card.style.borderRadius = '8px';
-
-      td.appendChild(card);
-
-      row.appendChild(td);
-
-    });
-
-    table.appendChild(row);
-
-    el.replaceWith(table);
-
-  });
-
-  clone.querySelectorAll('.brandgrid').forEach(el => {
-
-    const cards = [...el.children];
-
-    const table = document.createElement('table');
-    table.setAttribute('role', 'presentation');
-    table.style.width = '100%';
-    table.style.borderCollapse = 'collapse';
-
-    cards.forEach(card => {
-
-      const tr = document.createElement('tr');
-
-      const td = document.createElement('td');
-
-      td.style.paddingBottom = '12px';
-
-      card.style.background = '#FFFFFF';
-      card.style.border = '1px solid #DDD0BB';
-      card.style.padding = '14px';
-      card.style.borderRadius = '8px';
-
-      td.appendChild(card);
-
-      tr.appendChild(td);
-
-      table.appendChild(tr);
-
-    });
-
-    el.replaceWith(table);
-
-  });
-
-  clone.querySelectorAll('.rheader').forEach(el => {
-
-    el.style.background = '#3D1F0A';
-    el.style.color = '#FFFFFF';
-    el.style.padding = '24px';
-    el.style.marginBottom = '18px';
-
-  });
-
-  clone.querySelectorAll('.initrow').forEach(el => {
-
-    el.style.border = '1px solid #DDD0BB';
-    el.style.background = '#FFFFFF';
-    el.style.padding = '12px';
-    el.style.marginBottom = '10px';
-
-  });
-
-  clone.querySelectorAll('img').forEach(img => {
-
-    img.style.maxWidth = '100%';
-    img.style.height = 'auto';
-
-  });
-
-  const htmlContent = `
-    <div style="
-      font-family:Calibri,Arial,sans-serif;
-      max-width:900px;
-      color:#1A1208;
-      background:#FAF7F2;
-      padding:12px;
-    ">
-      ${clone.innerHTML}
-    </div>
-  `;
-
-  const textContent = clone.innerText;
-
-  try{
-
-    const item = new ClipboardItem({
-
-      "text/html": new Blob(
-        [htmlContent],
-        {type:"text/html"}
-      ),
-
-      "text/plain": new Blob(
-        [textContent],
-        {type:"text/plain"}
-      )
-
-    });
-
-    await navigator.clipboard.write([item]);
-
-    status.textContent =
-      "✓ Outlook-friendly report copied.";
-
-  }catch(e){
-
-    try{
-
-      await navigator.clipboard.writeText(textContent);
-
-      status.textContent =
-        "Copied as plain text.";
-
-    }catch(e2){
-
-      status.textContent =
-        "Copy failed.";
-
-    }
-
+  if(typeof html2canvas === 'undefined'){
+    status.textContent = "Image engine still loading — wait a moment and try again (needs internet).";
+    return;
   }
 
-  setTimeout(() => {
+  status.textContent = "Rendering report to image...";
 
-    status.textContent = '';
+  try{
+    // Render the report node to a high-resolution canvas
+    const canvas = await html2canvas(reportEl, {
+      scale: 2,                     // sharper output for email
+      backgroundColor: "#FAF7F2",   // cream, matches report bg
+      useCORS: true,
+      logging: false
+    });
 
-  }, 5000);
+    // Canvas -> PNG blob
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+    if(!blob) throw new Error("Could not create image");
 
+    // Write the image to the clipboard
+    await navigator.clipboard.write([
+      new ClipboardItem({ 'image/png': blob })
+    ]);
+
+    status.textContent = "✓ Report image copied. Opening Outlook — press Ctrl+V in the new email to paste it.";
+
+    // Open a new email in the default mail client (Outlook on most work machines)
+    const distName = (state.distributorName || "Distributor").trim();
+    const typeLabel = state.reportType === 'mid' ? "Mid-Month" : "End of Month";
+    const subject = encodeURIComponent(`${distName} — ${state.month} ${state.year} ${typeLabel} Report`);
+    // Small delay so the clipboard write fully settles before the mail app grabs focus
+    setTimeout(() => { window.location.href = `mailto:?subject=${subject}`; }, 250);
+
+  }catch(err){
+    status.textContent = "Image copy failed: " + err.message + ". Try the Print / Save PDF button instead.";
+  }
+  setTimeout(() => { if(status.textContent.startsWith('✓')) status.textContent = ''; }, 9000);
 }
 
 function saveState(){
