@@ -587,7 +587,7 @@ function renderAll(){
     ${state.halfPct ? ` ${half} time elapsed: ${state.halfPct}.` : ''} All figures subject to change at month close.</div>`;
   }
 
-  html += `<div class="greeting" contenteditable="true" id="greetingEl">${state.greeting || defaultGreeting(isMid, state.month, half, state.halfPct, ytdPct)}</div>`;
+  html += `<div class="greeting" contenteditable="true" id="greetingEl">${state.greeting || defaultGreeting(isMid, state.month, half, state.halfPct, ytdPct, distName)}</div>`;
 
   html += `<div class="seclabel">Total Portfolio — ${state.month} ${state.year} ${isMid?'Mid-Month Projection':'Snapshot'}</div>`;
   html += `<div class="kpigrid">
@@ -662,11 +662,12 @@ function renderAll(){
   attachEditableListeners();
 }
 
-function defaultGreeting(isMid, month, half, halfPct, ytdPct){
+function defaultGreeting(isMid, month, half, halfPct, ytdPct, distName){
+  const greetName = distName && distName !== "[Distributor Name]" ? `${distName} Leadership` : "Leadership Team";
   if(isMid){
-    return `Good morning Delicato Leadership — below is the mid-month projection snapshot for ${month}. Month Final figures reflect projected close estimates based on current pace. ${half} is ${halfPct || 'X'}% elapsed with the portfolio tracking at ${ytdPct}% of YTD Plan.`;
+    return `Good morning ${greetName} — below is the mid-month projection snapshot for ${month}. Month Final figures reflect projected close estimates based on current pace. ${half} is ${halfPct || 'X'}% elapsed with the portfolio tracking at ${ytdPct}% of YTD Plan.`;
   }
-  return `Good morning Delicato Leadership — below is the full end-of-month performance recap for ${month}, covering volume results, brand-level detail, and upcoming initiatives. Thank you to the entire team for your continued partnership and support throughout the month.`;
+  return `Good morning ${greetName} — below is the full end-of-month performance recap for ${month}, covering volume results, brand-level detail, and upcoming initiatives. Thank you to the entire team for your continued partnership and support throughout the month.`;
 }
 
 let editableStore = {greeting:'', kpiC:['','',''], brandCommentary:{}, initDetail:{}};
