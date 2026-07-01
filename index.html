@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alliance Beverage — Report Generator</title>
+<style>
+:root{
+  --brown-dark:#3D1F0A; --brown-mid:#5A2D0C; --brown-light:#7A4A1E;
+  --gold:#C49A6C; --gold-light:#E8D5B7; --cream:#FAF7F2;
+  --text:#1A1208; --text-muted:#6B5A45; --text-light:#9E8A72;
+  --border:#DDD0BB; --green:#2D6A1F; --green-bg:#EEF5EB;
+  --red:#8B1A1A; --red-bg:#FDF0F0; --amber:#7A4E00; --amber-bg:#FEF8EC;
+  --white:#FFFFFF; --lightgray:#F5F0E8;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{font-family:'Segoe UI',Calibri,sans-serif; background:#e8e2d6; color:var(--text); font-size:14px; line-height:1.5;}
+.app{display:grid; grid-template-columns: 420px 1fr; min-height:100vh;}
+@media (max-width: 1000px){ .app{grid-template-columns: 1fr;} }
+
+.panel{background:#fff; border-right:1px solid #ccc; padding:1.25rem; overflow-y:auto; max-height:100vh; position:sticky; top:0;}
+@media (max-width: 1000px){ .panel{position:static; max-height:none;} }
+.panel h1{font-size:18px; color:var(--brown-dark); margin-bottom:4px;}
+.panel .tagline{font-size:12px; color:var(--text-light); margin-bottom:1rem;}
+.section{border:1px solid var(--border); border-radius:8px; margin-bottom:1rem; overflow:hidden;}
+.section-head{background:var(--lightgray); padding:8px 12px; font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:0.04em; color:var(--brown-mid); cursor:pointer; display:flex; justify-content:space-between; align-items:center;}
+.section-body{padding:12px;}
+.section-body.collapsed{display:none;}
+label{display:block; font-size:11.5px; color:var(--text-muted); margin:8px 0 3px;}
+input[type=text], input[type=number], input[type=date], select, textarea{
+  width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:5px; font-size:13px; font-family:inherit;
+}
+textarea{resize:vertical; min-height:60px;}
+.row2{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
+.row3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;}
+.btn{
+  background:var(--brown-dark); color:#fff; border:none; padding:8px 14px; border-radius:6px;
+  font-size:12.5px; cursor:pointer; font-weight:500;
+}
+.btn:hover{background:var(--brown-mid);}
+.btn.gold{background:var(--gold); color:var(--brown-dark);}
+.btn.gold:hover{background:#b8895a;}
+.btn.small{padding:4px 8px; font-size:11px;}
+.btn.danger{background:var(--red);}
+.btn.outline{background:transparent; color:var(--brown-dark); border:1px solid var(--border);}
+.toggle-row{display:flex; gap:8px; margin-bottom:8px;}
+.toggle-row button{flex:1;}
+.toggle-row button.active{background:var(--brown-dark); color:#fff;}
+.toggle-row button:not(.active){background:var(--lightgray); color:var(--text-muted);}
+
+.brand-row-editor{border:1px solid var(--border); border-radius:6px; padding:8px; margin-bottom:8px; background:#fdfcfa;}
+.brand-row-editor .rowtop{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;}
+.brand-row-editor .rowtop input[type=text]{font-weight:600; flex:1; margin-right:6px;}
+.mini-grid{display:grid; grid-template-columns:repeat(6,1fr); gap:4px; margin-bottom:4px;}
+.mini-grid input{padding:3px 4px; font-size:11px;}
+.mini-label{font-size:9px; color:var(--text-light); text-align:center;}
+.rowmeta{display:flex; gap:6px; align-items:center; margin-top:4px;}
+.rowmeta select{font-size:11px; padding:3px;}
+
+.initiative-editor{border:1px solid var(--border); border-radius:6px; padding:8px; margin-bottom:8px;}
+.initiative-editor input, .initiative-editor textarea{margin-bottom:4px;}
+
+.imgpreview{max-width:100%; border:1px solid var(--border); border-radius:6px; margin-top:6px;}
+.hint{font-size:11px; color:var(--text-light); margin-top:4px; line-height:1.5;}
+
+.preview-wrap{padding:2rem 1.5rem; overflow-y:auto;}
+.toolbar{display:flex; gap:10px; margin-bottom:1rem; align-items:center; flex-wrap:wrap;}
+.toolbar .status{font-size:12px; color:var(--text-light);}
+
+.report{max-width:900px; margin:0 auto; background:var(--cream); padding:0;}
+.rheader{background:var(--brown-dark); color:#fff; border-radius:10px; padding:1.5rem 1.75rem; margin-bottom:1.25rem; display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px;}
+.rheader .eyebrow{font-size:11px; letter-spacing:0.1em; color:var(--gold); font-weight:600; margin-bottom:4px;}
+.rheader h2{font-size:24px; font-weight:500; margin-top:2px;}
+.rheader .sub{font-size:12px; color:#bbb; margin-top:3px;}
+.rheader .right{text-align:right; font-size:11px; color:#aaa; line-height:1.8;}
+
+.banner{border-left:5px solid var(--gold); background:var(--amber-bg); border:1px solid var(--border); border-radius:8px; padding:12px 16px; margin-bottom:1.25rem; font-size:13px; color:var(--text-muted);}
+.banner b{color:var(--amber);}
+
+.greeting{background:#fff; border:1px solid var(--border); border-radius:8px; padding:14px 18px; margin-bottom:1.25rem; font-size:13.5px; color:var(--text-muted); line-height:1.7;}
+.greeting[contenteditable=true]:focus{outline:2px dashed var(--gold); outline-offset:3px;}
+
+.seclabel{font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-light); margin:1.25rem 0 8px;}
+
+.kpigrid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:1.25rem;}
+.kpi{background:#fff; border:1px solid var(--border); border-radius:8px; padding:14px 16px;}
+.kpi .l{font-size:11px; color:var(--text-light); margin-bottom:4px;}
+.kpi .v{font-size:26px; font-weight:600;}
+.kpi .s{font-size:11px; color:var(--text-light); margin-top:2px;}
+.kpi .c{font-size:11px; color:var(--text-muted); font-style:italic; margin-top:8px; padding-top:8px; border-top:1px solid var(--border);}
+.kpi .c[contenteditable=true]:focus{outline:1px dashed var(--gold);}
+.v.green{color:var(--green);} .v.amber{color:var(--amber);} .v.red{color:var(--red);}
+
+.tablewrap{border:1px solid var(--border); border-radius:8px; overflow-x:auto; margin-bottom:1.25rem; background:#fff;}
+table{width:100%; border-collapse:collapse; font-size:11px; min-width:820px;}
+th{padding:6px; text-align:center; font-weight:600;}
+td{padding:6px; text-align:center; border-bottom:1px solid var(--border);}
+td.lbl{text-align:left; font-weight:500;}
+tr.total td, tr.subtotal td{font-weight:600; background:var(--lightgray);}
+.g{color:var(--green);} .a{color:var(--amber);} .r{color:var(--red);}
+
+.brandgrid{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:1rem;}
+.bcard{background:#fff; border:1px solid var(--border); border-radius:8px; padding:14px 16px;}
+.bcard .bhead{display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); padding-bottom:6px; margin-bottom:8px;}
+.bcard .bname{font-weight:600; color:var(--brown-dark); font-size:14px;}
+.badge{font-size:10px; font-weight:600; padding:2px 8px; border-radius:20px;}
+.badge.green{background:var(--green-bg); color:var(--green);}
+.badge.amber{background:var(--amber-bg); color:var(--amber);}
+.badge.red{background:var(--red-bg); color:var(--red);}
+.statrow{display:flex; justify-content:space-between; font-size:11.5px; padding:2px 0; color:var(--text-muted);}
+.statrow b{color:var(--text);}
+.bcommentary{margin-top:8px; padding-top:8px; border-top:1px solid var(--border); font-size:11.5px; color:var(--text-muted); font-style:italic; min-height:20px;}
+.bcommentary[contenteditable=true]:focus{outline:1px dashed var(--gold);}
+.bcommentary:empty:before{content:"Click to add commentary..."; color:var(--text-light); font-style:italic;}
+
+.snipbox{border:1px dashed var(--border); border-radius:8px; background:var(--lightgray); text-align:center; padding:30px; margin-bottom:1.25rem;}
+.snipbox img{max-width:100%; border-radius:6px; border:1px solid var(--border);}
+.snipbox .placeholder{color:var(--text-light); font-weight:600; font-size:14px;}
+.snipbox .sub{color:var(--text-light); font-size:11px; margin-top:6px;}
+
+.initrow{display:flex; gap:12px; background:#fff; border:1px solid var(--border); border-radius:8px; padding:10px 14px; margin-bottom:8px; align-items:flex-start;}
+.initnum{width:24px; height:24px; border-radius:50%; background:var(--gold-light); color:var(--brown-mid); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; flex-shrink:0;}
+.initcontent .ib{font-weight:600; color:var(--brown-dark); font-size:13px; margin-bottom:2px;}
+.initcontent .id{font-size:12px; color:var(--text-muted);}
+.initcontent .id[contenteditable=true]:focus{outline:1px dashed var(--gold);}
+
+.rfooter{text-align:center; font-size:10px; color:var(--text-light); text-transform:uppercase; letter-spacing:0.05em; border-top:1px solid var(--border); padding-top:14px; margin-top:1.5rem;}
+
+@media print{
+  .panel, .toolbar{display:none;}
+  .app{grid-template-columns:1fr;}
+  body{background:#fff;}
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <div class="panel">
+    <h1>Alliance Beverage Report Generator</h1>
+    <div class="tagline">Delicato Family Wines · Mid-Month &amp; EOM Volume Reports</div>
+
+    <div class="section">
+      <div class="section-head" onclick="toggleSection(this)">Report Setup <span>▾</span></div>
+      <div class="section-body">
+        <label>Report Type</label>
+        <div class="toggle-row">
+          <button id="btnMid" class="active" onclick="setReportType('mid')">Mid-Month</button>
+          <button id="btnEom" onclick="setReportType('eom')">End of Month</button>
+        </div>
+
+        <div class="row2">
+          <div>
+            <label>Month</label>
+            <select id="monthSel" onchange="renderAll()">
+              <option>January</option><option>February</option><option>March</option>
+              <option>April</option><option>May</option><option>June</option>
+              <option selected>July</option><option>August</option><option>September</option>
+              <option>October</option><option>November</option><option>December</option>
+            </select>
+          </div>
+          <div>
+            <label>Year</label>
+            <input type="text" id="yearInp" value="2026" oninput="renderAll()">
+          </div>
+        </div>
+
+        <label>Prepared Date (shown top-right)</label>
+        <input type="text" id="preparedInp" value="July 2026" oninput="renderAll()">
+
+        <div class="hint" id="halfHint" style="margin-top:8px;"></div>
+
+        <label>% of Half-Year Elapsed (H1 or H2, your estimate)</label>
+        <input type="text" id="halfPctInp" value="" placeholder="e.g. 5%" oninput="renderAll()">
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head" onclick="toggleSection(this)">Paste Data From Sheet/Excel <span>▾</span></div>
+      <div class="section-body">
+        <div class="hint">Copy your table cells (tab-separated, one brand per line) in this exact column order and paste below:<br>
+        <b>Label, Month Final, Month Plan, LYMTD, Case Chg, %Chg vs LY, 2026 YTD, YTD Plan, LYTD, Case Chg, %Chg vs LY</b><br>
+        (% Plan Achieved columns are calculated automatically — don't paste those.)</div>
+        <textarea id="pasteBox" placeholder="Total DFW	184	165	222	(38)	(17%)	745	928	864	(119)	(14%)
+Core Portfolio	178	163	213	(35)	(16%)	734	916	839	(106)	(13%)
+..."></textarea>
+        <button class="btn gold" style="margin-top:6px;" onclick="parsePastedData()">Parse &amp; Fill Table</button>
+        <div class="hint">This replaces all current brand rows with the parsed data.</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head" onclick="toggleSection(this)">Brand Rows <span>▾</span></div>
+      <div class="section-body" id="brandEditorBody"></div>
+      <div class="section-body" style="padding-top:0;">
+        <button class="btn small outline" onclick="addBrandRow()">+ Add Row</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head" onclick="toggleSection(this)">Data Snapshot Image <span>▾</span></div>
+      <div class="section-body">
+        <div class="hint">Upload the screenshot from your reporting system. It will appear in the report between Brand Notes and Initiatives.</div>
+        <input type="file" id="snipInput" accept="image/*" onchange="handleImageUpload(event)">
+        <img id="snipPreviewThumb" class="imgpreview" style="display:none;">
+        <button class="btn small danger" style="margin-top:6px; display:none;" id="clearSnipBtn" onclick="clearSnip()">Remove Image</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head" onclick="toggleSection(this)">KPI Commentary <span>▾</span></div>
+      <div class="section-body">
+        <label>Tile 1 Commentary (Total DFW)</label>
+        <textarea id="kpiC1" oninput="renderAll()"></textarea>
+        <label>Tile 2 Commentary (vs. Last Year)</label>
+        <textarea id="kpiC2" oninput="renderAll()"></textarea>
+        <label>Tile 3 Commentary (YTD vs. Plan)</label>
+        <textarea id="kpiC3" oninput="renderAll()"></textarea>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head" onclick="toggleSection(this)">Greeting Text <span>▾</span></div>
+      <div class="section-body">
+        <textarea id="greetingInp" oninput="renderAll()" style="min-height:90px;"></textarea>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head" onclick="toggleSection(this)">Initiatives <span>▾</span></div>
+      <div class="section-body" id="initEditorBody"></div>
+      <div class="section-body" style="padding-top:0;">
+        <button class="btn small outline" onclick="addInitiative()">+ Add Initiative</button>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:8px; margin-top:1rem;">
+      <button class="btn" onclick="saveState()">Save</button>
+      <button class="btn outline" onclick="loadState()">Reload Saved</button>
+      <button class="btn danger" onclick="resetAll()">Reset All</button>
+    </div>
+  </div>
+
+  <div class="preview-wrap">
+    <div class="toolbar">
+      <button class="btn gold" onclick="copyFormatted()">📋 Copy Formatted Report</button>
+      <button class="btn outline" onclick="window.print()">🖨️ Print / Save PDF</button>
+      <span class="status" id="copyStatus"></span>
+    </div>
+
+    <div class="report" id="reportRoot"></div>
+  </div>
+
+</div>
+
+<script>
+function defaultRows(){
+  return [
+    mkRow("Total DFW","total",0,184,165,222,-38,-17,745,928,864,-119,-14),
+    mkRow("Core Portfolio","subtotal",0,178,163,213,-35,-16,734,916,839,-106,-13),
+    mkRow("Core Glass","subtotal",0,176,162,213,-32,-16,725,907,829,-105,-13),
+    mkRow("Diamond Collection","brand",1,118,98,121,-3,-3,442,589,481,-39,-8),
+    mkRow("The Wines of Francis Coppola","brand",1,5,3,3,2,67,18,20,20,-2,-10),
+    mkRow("Relax","brand",1,41,34,58,-17,-29,184,169,194,9,-5),
+    mkRow("Schmitt Sohne","brand",1,12,26,26,-14,-54,80,129,135,-55,-41),
+    mkRow("Transcendent Wines","total",0,2,2,4,-2,-55,9,9,10,-1,-10),
+    mkRow("Director's Cut","brand",1,2,2,4,-2,-55,9,9,10,-1,-10),
+  ];
+}
+function mkRow(label,type,indent,mf,mp,lymtd,cc1,pl1,ytd,ytdp,lytd,cc2,pl2){
+  return {label,type,indent,
+    mtdFinal:mf, mtdPlan:mp, lymtd:lymtd, mtdCaseChg:cc1, mtdPctLY:pl1,
+    ytd:ytd, ytdPlan:ytdp, lytd:lytd, ytdCaseChg:cc2, ytdPctLY:pl2,
+    badge:"", commentary:""};
+}
+
+let state = {
+  reportType: "mid",
+  month: "July", year: "2026", prepared: "July 2026",
+  halfPct: "",
+  rows: defaultRows(),
+  snipData: null,
+  kpiC: ["","",""],
+  greeting: "",
+  initiatives: [
+    {brand:"Diamond Collection", detail:""},
+    {brand:"Relax", detail:""},
+    {brand:"Schmitt Sohne", detail:""},
+    {brand:"The Wines of Francis Coppola", detail:""},
+    {brand:"On Premise", detail:""},
+  ]
+};
+
+function toggleSection(head){
+  const body = head.nextElementSibling;
+  body.classList.toggle('collapsed');
+  head.querySelector('span').textContent = body.classList.contains('collapsed') ? '▸' : '▾';
+}
+function setReportType(t){
+  state.reportType = t;
+  document.getElementById('btnMid').classList.toggle('active', t==='mid');
+  document.getElementById('btnEom').classList.toggle('active', t==='eom');
+  renderAll();
+}
+function fmtNum(n){ return n < 0 ? `(${Math.abs(n)})` : `${n}`; }
+function fmtPct(n){ return n < 0 ? `(${Math.abs(n)}%)` : `${n}%`; }
+function pctColor(pct){ return pct >= 100 ? 'g' : pct >= 70 ? 'a' : 'r'; }
+function badgeColor(b){
+  const g = ["Above Plan","On Plan","On Track","Projected Above Plan","Strong"];
+  if(g.includes(b)) return 'green';
+  if(b === 'Watch') return 'amber';
+  return 'red';
+}
+function pctAchieved(actual, plan){
+  if(!plan) return 0;
+  return Math.round((actual/plan)*1000)/10;
+}
+
+function renderBrandEditor(){
+  const body = document.getElementById('brandEditorBody');
+  body.innerHTML = '';
+  state.rows.forEach((row, i) => {
+    const div = document.createElement('div');
+    div.className = 'brand-row-editor';
+    div.innerHTML = `
+      <div class="rowtop">
+        <input type="text" value="${row.label}" onchange="updateRow(${i},'label',this.value)">
+        <button class="btn small danger" onclick="removeRow(${i})">✕</button>
+      </div>
+      <div class="mini-grid">
+        <div class="mini-label">MTD Final</div><div class="mini-label">MTD Plan</div><div class="mini-label">LYMTD</div>
+        <div class="mini-label">Case Chg</div><div class="mini-label">%LY</div><div class="mini-label"></div>
+      </div>
+      <div class="mini-grid">
+        <input type="number" value="${row.mtdFinal}" onchange="updateRow(${i},'mtdFinal',parseFloat(this.value)||0)">
+        <input type="number" value="${row.mtdPlan}" onchange="updateRow(${i},'mtdPlan',parseFloat(this.value)||0)">
+        <input type="number" value="${row.lymtd}" onchange="updateRow(${i},'lymtd',parseFloat(this.value)||0)">
+        <input type="number" value="${row.mtdCaseChg}" onchange="updateRow(${i},'mtdCaseChg',parseFloat(this.value)||0)">
+        <input type="number" value="${row.mtdPctLY}" onchange="updateRow(${i},'mtdPctLY',parseFloat(this.value)||0)">
+        <div></div>
+      </div>
+      <div class="mini-grid">
+        <div class="mini-label">YTD</div><div class="mini-label">YTD Plan</div><div class="mini-label">LYTD</div>
+        <div class="mini-label">Case Chg</div><div class="mini-label">%LY</div><div class="mini-label"></div>
+      </div>
+      <div class="mini-grid">
+        <input type="number" value="${row.ytd}" onchange="updateRow(${i},'ytd',parseFloat(this.value)||0)">
+        <input type="number" value="${row.ytdPlan}" onchange="updateRow(${i},'ytdPlan',parseFloat(this.value)||0)">
+        <input type="number" value="${row.lytd}" onchange="updateRow(${i},'lytd',parseFloat(this.value)||0)">
+        <input type="number" value="${row.ytdCaseChg}" onchange="updateRow(${i},'ytdCaseChg',parseFloat(this.value)||0)">
+        <input type="number" value="${row.ytdPctLY}" onchange="updateRow(${i},'ytdPctLY',parseFloat(this.value)||0)">
+        <div></div>
+      </div>
+      <div class="rowmeta">
+        <select onchange="updateRow(${i},'type',this.value)">
+          <option value="total" ${row.type==='total'?'selected':''}>Total/Bold Row</option>
+          <option value="subtotal" ${row.type==='subtotal'?'selected':''}>Subtotal</option>
+          <option value="brand" ${row.type==='brand'?'selected':''}>Brand (indented, gets card)</option>
+        </select>
+      </div>
+    `;
+    body.appendChild(div);
+  });
+}
+function updateRow(i, field, val){ state.rows[i][field] = val; renderAll(); }
+function removeRow(i){ state.rows.splice(i,1); renderBrandEditor(); renderAll(); }
+function addBrandRow(){
+  state.rows.push(mkRow("New Brand","brand",1,0,0,0,0,0,0,0,0,0,0));
+  renderBrandEditor(); renderAll();
+}
+
+function parsePastedData(){
+  const txt = document.getElementById('pasteBox').value.trim();
+  if(!txt) return;
+  const lines = txt.split('\n').filter(l => l.trim());
+  const newRows = [];
+  lines.forEach(line => {
+    const cells = line.split('\t').map(c => c.trim());
+    if(cells.length < 11) return;
+    const parseParen = s => {
+      s = String(s).trim();
+      const neg = s.startsWith('(') && s.endsWith(')');
+      const num = parseFloat(s.replace(/[(),%]/g,'')) || 0;
+      return neg ? -num : num;
+    };
+    const label = cells[0];
+    const isSubtotal = /^(Core Portfolio|Core Glass)$/i.test(label);
+    const isTotal = /^(Total DFW|Transcendent Wines)$/i.test(label);
+    const type = isSubtotal ? 'subtotal' : isTotal ? 'total' : 'brand';
+    const indent = type === 'brand' ? 1 : 0;
+    newRows.push(mkRow(
+      label, type, indent,
+      parseParen(cells[1]), parseParen(cells[2]), parseParen(cells[3]),
+      parseParen(cells[4]), parseParen(cells[5]), parseParen(cells[6]),
+      parseParen(cells[7]), parseParen(cells[8]), parseParen(cells[9]),
+      parseParen(cells[10])
+    ));
+  });
+  if(newRows.length){
+    state.rows = newRows;
+    renderBrandEditor();
+    renderAll();
+  }
+}
+
+function handleImageUpload(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(evt){
+    state.snipData = evt.target.result;
+    document.getElementById('snipPreviewThumb').src = state.snipData;
+    document.getElementById('snipPreviewThumb').style.display = 'block';
+    document.getElementById('clearSnipBtn').style.display = 'inline-block';
+    renderAll();
+  };
+  reader.readAsDataURL(file);
+}
+function clearSnip(){
+  state.snipData = null;
+  document.getElementById('snipInput').value = '';
+  document.getElementById('snipPreviewThumb').style.display = 'none';
+  document.getElementById('clearSnipBtn').style.display = 'none';
+  renderAll();
+}
+
+function renderInitEditor(){
+  const body = document.getElementById('initEditorBody');
+  body.innerHTML = '';
+  state.initiatives.forEach((init, i) => {
+    const div = document.createElement('div');
+    div.className = 'initiative-editor';
+    div.innerHTML = `
+      <input type="text" value="${init.brand}" placeholder="Brand / Focus Area" onchange="updateInit(${i},'brand',this.value)">
+      <textarea placeholder="Detail (leave blank to fill in report)" onchange="updateInit(${i},'detail',this.value)">${init.detail}</textarea>
+      <button class="btn small danger" onclick="removeInit(${i})">Remove</button>
+    `;
+    body.appendChild(div);
+  });
+}
+function updateInit(i, field, val){ state.initiatives[i][field] = val; renderAll(); }
+function removeInit(i){ state.initiatives.splice(i,1); renderInitEditor(); renderAll(); }
+function addInitiative(){
+  state.initiatives.push({brand:"", detail:""});
+  renderInitEditor(); renderAll();
+}
+
+function renderAll(){
+  state.month = document.getElementById('monthSel').value;
+  state.year = document.getElementById('yearInp').value;
+  state.prepared = document.getElementById('preparedInp').value;
+  state.halfPct = document.getElementById('halfPctInp').value;
+  state.kpiC = [document.getElementById('kpiC1').value, document.getElementById('kpiC2').value, document.getElementById('kpiC3').value];
+
+  const monthIdx = ["January","February","March","April","May","June","July","August","September","October","November","December"].indexOf(state.month);
+  const half = monthIdx <= 5 ? "H1" : "H2";
+  document.getElementById('halfHint').textContent = `${state.month} falls in ${half} (${half==='H1'?'Jan–Jun':'Jul–Dec'}).`;
+
+  const isMid = state.reportType === 'mid';
+  const totalRow = state.rows.find(r => r.label.toLowerCase().includes('total dfw')) || state.rows[0];
+
+  const mtdPct = pctAchieved(totalRow.mtdFinal, totalRow.mtdPlan);
+  const ytdPct = pctAchieved(totalRow.ytd, totalRow.ytdPlan);
+
+  let html = '';
+
+  html += `<div class="rheader">
+    <div>
+      <div class="eyebrow">ALLIANCE BEVERAGE DISTRIBUTING</div>
+      <h2>Delicato Family Wines — ${isMid?'Mid-Month':'End of Month'} Report</h2>
+      <div class="sub">${state.month} ${state.year} Volume Performance ${isMid?'— Mid-Month Projection':'Recap'}</div>
+    </div>
+    <div class="right">Prepared: ${state.prepared}<br>Distributor: Alliance Beverage<br>Confidential</div>
+  </div>`;
+
+  if(isMid){
+    html += `<div class="banner"><b>MID-MONTH PROJECTION</b> &nbsp;|&nbsp; "Month Final" figures represent projected close estimates based on current pace, not confirmed MTD actuals.
+    ${state.halfPct ? ` ${half} time elapsed: ${state.halfPct}.` : ''} All figures subject to change at month close.</div>`;
+  }
+
+  html += `<div class="greeting" contenteditable="true" id="greetingEl">${state.greeting || defaultGreeting(isMid, state.month, half, state.halfPct, ytdPct)}</div>`;
+
+  html += `<div class="seclabel">Total Portfolio — ${state.month} ${state.year} ${isMid?'Mid-Month Projection':'Snapshot'}</div>`;
+  html += `<div class="kpigrid">
+    <div class="kpi">
+      <div class="l">Total DFW — ${isMid?'Projected Close':'Month Final'}</div>
+      <div class="v ${pctColor(mtdPct)}">${totalRow.mtdFinal}</div>
+      <div class="s">Plan: ${totalRow.mtdPlan} &nbsp;|&nbsp; ${mtdPct}% of Plan</div>
+      <div class="c" contenteditable="true" id="kpiC1el">${state.kpiC[0]}</div>
+    </div>
+    <div class="kpi">
+      <div class="l">vs. Last Year (${state.month})</div>
+      <div class="v ${totalRow.mtdPctLY>=0?'g':'r'}">${fmtPct(totalRow.mtdPctLY)}</div>
+      <div class="s">LY: ${totalRow.lymtd} &nbsp;|&nbsp; ${fmtNum(totalRow.mtdCaseChg)} cases</div>
+      <div class="c" contenteditable="true" id="kpiC2el">${state.kpiC[1]}</div>
+    </div>
+    <div class="kpi">
+      <div class="l">YTD vs. Plan</div>
+      <div class="v ${pctColor(ytdPct)}">${ytdPct}%</div>
+      <div class="s">${totalRow.ytd} of ${totalRow.ytdPlan} YTD Plan cases</div>
+      <div class="c" contenteditable="true" id="kpiC3el">${state.kpiC[2]}</div>
+    </div>
+  </div>`;
+
+  html += `<div class="seclabel">Volume Performance Detail</div>`;
+  html += `<div class="tablewrap"><table>
+    <thead>
+      <tr>
+        <th style="text-align:left; background:#3D1F0A; color:#fff;" rowspan="2">Brand / Group</th>
+        <th colspan="5" style="background:#5A2D0C; color:#fff;">${state.month} ${state.year}${isMid?' (Projected)':''}</th>
+        <th colspan="5" style="background:#3D1F0A; color:#fff;">YTD ${state.month} ${state.year}</th>
+      </tr>
+      <tr>
+        <th style="background:#C49A6C;">${isMid?'Proj. Final':'Month Final'}</th>
+        <th style="background:#C49A6C;">Plan</th>
+        <th style="background:#C49A6C;">LY</th>
+        <th style="background:#C49A6C;">Case Chg</th>
+        <th style="background:#C49A6C;">% Chg LY</th>
+        <th style="background:#C49A6C;">YTD</th>
+        <th style="background:#C49A6C;">YTD Plan</th>
+        <th style="background:#C49A6C;">LYTD</th>
+        <th style="background:#C49A6C;">Case Chg</th>
+        <th style="background:#C49A6C;">% Chg LY</th>
+      </tr>
+    </thead><tbody>`;
+
+  state.rows.forEach(row => {
+    const cls = row.type==='total'||row.type==='subtotal' ? row.type : '';
+    const indentStr = row.indent ? '&nbsp;&nbsp;&nbsp;&nbsp;' : '';
+    html += `<tr class="${cls}">
+      <td class="lbl">${indentStr}${row.label}</td>
+      <td>${row.mtdFinal}</td>
+      <td>${row.mtdPlan}</td>
+      <td>${row.lymtd}</td>
+      <td class="${row.mtdCaseChg>=0?'g':'r'}">${fmtNum(row.mtdCaseChg)}</td>
+      <td class="${row.mtdPctLY>=0?'g':'r'}">${fmtPct(row.mtdPctLY)}</td>
+      <td>${row.ytd}</td>
+      <td>${row.ytdPlan}</td>
+      <td>${row.lytd}</td>
+      <td class="${row.ytdCaseChg>=0?'g':'r'}">${fmtNum(row.ytdCaseChg)}</td>
+      <td class="${row.ytdPctLY>=0?'g':'r'}">${fmtPct(row.ytdPctLY)}</td>
+    </tr>`;
+  });
+  html += `</tbody></table></div>`;
+
+  html += `<div class="seclabel">Brand-Level Notes</div><div class="brandgrid">`;
+  const brandRows = state.rows.filter(r => r.type === 'brand');
+  brandRows.forEach((row, idx) => {
+    const mtdP = pctAchieved(row.mtdFinal, row.mtdPlan);
+    const ytdP = pctAchieved(row.ytd, row.ytdPlan);
+    const badge = mtdP >= 100 ? 'Above Plan' : mtdP >= 70 ? 'Watch' : 'Below Plan';
+    const bc = badgeColor(badge);
+    html += `<div class="bcard">
+      <div class="bhead"><div class="bname">${row.label}</div><div class="badge ${bc}">${badge}</div></div>
+      <div class="statrow">${isMid?'Proj.':'Month'} vs. Plan: <b class="${pctColor(mtdP)}">${mtdP}%</b></div>
+      <div class="statrow">vs. LY: <b class="${row.mtdPctLY>=0?'g':'r'}">${fmtPct(row.mtdPctLY)} (${fmtNum(row.mtdCaseChg)} cases)</b></div>
+      <div class="statrow">YTD vs. Plan: <b class="${pctColor(ytdP)}">${ytdP}%</b></div>
+      <div class="bcommentary" contenteditable="true" id="bc_${idx}"></div>
+    </div>`;
+  });
+  const ytdGap = totalRow.ytdPlan - totalRow.ytd;
+  html += `<div class="bcard">
+    <div class="bhead"><div class="bname">Portfolio Summary</div><div class="badge ${pctColor(ytdPct)==='g'?'green':pctColor(ytdPct)==='a'?'amber':'red'}">${ytdPct>=100?'On Plan':'Watch'}</div></div>
+    <div class="statrow">Total DFW ${isMid?'Proj.':'Final'}: <b>${mtdPct}% of Plan</b></div>
+    <div class="statrow">YTD vs. Plan: <b>${ytdPct}% &nbsp;|&nbsp; ${ytdGap>=0?ytdGap+' case gap':Math.abs(ytdGap)+' cases ahead'}</b></div>
+    <div class="statrow">vs. LY (Month): <b class="${totalRow.mtdPctLY>=0?'g':'r'}">${fmtPct(totalRow.mtdPctLY)}</b></div>
+    <div class="bcommentary" contenteditable="true" id="bc_summary"></div>
+  </div>`;
+  html += `</div>`;
+
+  html += `<div class="seclabel">2026 Volume Performance — Data Snapshot</div>`;
+  if(state.snipData){
+    html += `<div style="margin-bottom:1.25rem;"><img src="${state.snipData}" style="max-width:100%; border:1px solid var(--border); border-radius:8px;"></div>`;
+  } else {
+    html += `<div class="snipbox"><div class="placeholder">[ INSERT DATA SNIP HERE ]</div><div class="sub">Upload your screenshot in the left panel, or paste it directly into this spot after copying the report.</div></div>`;
+  }
+
+  html += `<div class="seclabel">${half === 'H1' ? 'Upcoming' : 'Remaining'} Initiatives${isMid?' — '+half+' Focus':''}</div>`;
+  state.initiatives.forEach((init, i) => {
+    html += `<div class="initrow">
+      <div class="initnum">${i+1}</div>
+      <div class="initcontent">
+        <div class="ib">${init.brand || 'Brand / Focus Area'}</div>
+        <div class="id" contenteditable="true" id="init_${i}">${init.detail}</div>
+      </div>
+    </div>`;
+  });
+
+  html += `<div class="rfooter">Alliance Beverage Distributing &nbsp;·&nbsp; Delicato Family Wines &nbsp;·&nbsp; ${state.month} ${state.year} ${isMid?'Mid-Month':'End of Month'} Report &nbsp;·&nbsp; Confidential</div>`;
+
+  document.getElementById('reportRoot').innerHTML = html;
+
+  restoreEditableFields();
+  attachEditableListeners();
+}
+
+function defaultGreeting(isMid, month, half, halfPct, ytdPct){
+  if(isMid){
+    return `Good morning Delicato Leadership — below is the mid-month projection snapshot for ${month}. Month Final figures reflect projected close estimates based on current pace. ${half} is ${halfPct || 'X'}% elapsed with the portfolio tracking at ${ytdPct}% of YTD Plan.`;
+  }
+  return `Good morning Delicato Leadership — below is the full end-of-month performance recap for ${month}, covering volume results, brand-level detail, and upcoming initiatives. Thank you to the entire team for your continued partnership and support throughout the month.`;
+}
+
+let editableStore = {greeting:'', kpiC:['','',''], brandCommentary:{}, initDetail:{}};
+
+function attachEditableListeners(){
+  const g = document.getElementById('greetingEl');
+  if(g) g.addEventListener('input', () => editableStore.greeting = g.innerHTML);
+
+  ['kpiC1el','kpiC2el','kpiC3el'].forEach((id,i) => {
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('input', () => editableStore.kpiC[i] = el.innerHTML);
+  });
+
+  document.querySelectorAll('.bcommentary').forEach(el => {
+    el.addEventListener('input', () => editableStore.brandCommentary[el.id] = el.innerHTML);
+  });
+  document.querySelectorAll('.initcontent .id').forEach(el => {
+    el.addEventListener('input', () => editableStore.initDetail[el.id] = el.innerHTML);
+  });
+}
+function restoreEditableFields(){
+  const g = document.getElementById('greetingEl');
+  if(g && editableStore.greeting) g.innerHTML = editableStore.greeting;
+
+  ['kpiC1el','kpiC2el','kpiC3el'].forEach((id,i) => {
+    const el = document.getElementById(id);
+    if(el && editableStore.kpiC[i]) el.innerHTML = editableStore.kpiC[i];
+  });
+
+  Object.keys(editableStore.brandCommentary).forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.innerHTML = editableStore.brandCommentary[id];
+  });
+  Object.keys(editableStore.initDetail).forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.innerHTML = editableStore.initDetail[id];
+  });
+}
+
+async function copyFormatted(){
+  const reportEl = document.getElementById('reportRoot');
+  const htmlContent = `<div style="font-family:Calibri,sans-serif;">${reportEl.innerHTML}</div>`;
+  const textContent = reportEl.innerText;
+  const status = document.getElementById('copyStatus');
+  try{
+    const item = new ClipboardItem({
+      "text/html": new Blob([htmlContent], {type:"text/html"}),
+      "text/plain": new Blob([textContent], {type:"text/plain"})
+    });
+    await navigator.clipboard.write([item]);
+    status.textContent = "✓ Copied! Paste into Word, Outlook, or Email.";
+  }catch(e){
+    try{
+      await navigator.clipboard.writeText(textContent);
+      status.textContent = "Copied as plain text (formatted copy not supported in this browser).";
+    }catch(e2){
+      status.textContent = "Copy failed — try selecting the report manually.";
+    }
+  }
+  setTimeout(() => status.textContent = '', 5000);
+}
+
+function saveState(){
+  const payload = {state, editableStore};
+  localStorage.setItem('abd_report_state', JSON.stringify(payload));
+  document.getElementById('copyStatus').textContent = "✓ Saved locally.";
+  setTimeout(() => document.getElementById('copyStatus').textContent = '', 3000);
+}
+function loadState(){
+  const raw = localStorage.getItem('abd_report_state');
+  if(!raw) return;
+  const payload = JSON.parse(raw);
+  state = payload.state;
+  editableStore = payload.editableStore || editableStore;
+  document.getElementById('monthSel').value = state.month;
+  document.getElementById('yearInp').value = state.year;
+  document.getElementById('preparedInp').value = state.prepared;
+  document.getElementById('halfPctInp').value = state.halfPct;
+  document.getElementById('kpiC1').value = state.kpiC[0];
+  document.getElementById('kpiC2').value = state.kpiC[1];
+  document.getElementById('kpiC3').value = state.kpiC[2];
+  setReportType(state.reportType);
+  if(state.snipData){
+    document.getElementById('snipPreviewThumb').src = state.snipData;
+    document.getElementById('snipPreviewThumb').style.display = 'block';
+    document.getElementById('clearSnipBtn').style.display = 'inline-block';
+  }
+  renderBrandEditor();
+  renderInitEditor();
+  renderAll();
+}
+function resetAll(){
+  if(!confirm("Reset everything to defaults? This cannot be undone.")) return;
+  state = {
+    reportType:"mid", month:"July", year:"2026", prepared:"July 2026", halfPct:"",
+    rows: defaultRows(), snipData:null, kpiC:["","",""], greeting:"",
+    initiatives:[
+      {brand:"Diamond Collection", detail:""},{brand:"Relax", detail:""},
+      {brand:"Schmitt Sohne", detail:""},{brand:"The Wines of Francis Coppola", detail:""},
+      {brand:"On Premise", detail:""}
+    ]
+  };
+  editableStore = {greeting:'', kpiC:['','',''], brandCommentary:{}, initDetail:{}};
+  document.getElementById('monthSel').value = "July";
+  document.getElementById('yearInp').value = "2026";
+  document.getElementById('preparedInp').value = "July 2026";
+  document.getElementById('halfPctInp').value = "";
+  document.getElementById('kpiC1').value = "";
+  document.getElementById('kpiC2').value = "";
+  document.getElementById('kpiC3').value = "";
+  document.getElementById('pasteBox').value = "";
+  clearSnip();
+  setReportType('mid');
+  renderBrandEditor();
+  renderInitEditor();
+  renderAll();
+}
+
+renderBrandEditor();
+renderInitEditor();
+renderAll();
+</script>
+</body>
+</html>
