@@ -251,16 +251,21 @@ Core Portfolio	178	163	213	(35)	(16%)	734	916	839	(106)	(13%)
     </div>
 
     <div style="display:flex; gap:8px; margin-top:1rem;">
-      <button class="btn" onclick="saveState()">Save</button>
-      <button class="btn outline" onclick="loadState()">Reload Saved</button>
+      <button class="btn" onclick="saveState()">Quick-Save (Browser)</button>
+      <button class="btn outline" onclick="loadState()">Reload Quick-Save</button>
       <button class="btn danger" onclick="resetAll()">Reset All</button>
     </div>
+    <div class="hint">Quick-Save keeps one draft in this browser only. Use <b>Save Report (.json)</b> in the toolbar above the report to save a permanent file to your computer for each month.</div>
   </div>
 
   <div class="preview-wrap">
     <div class="toolbar">
       <button class="btn gold" onclick="copyFormatted()">📋 Copy Formatted Report</button>
       <button class="btn outline" onclick="window.print()">🖨️ Print / Save PDF</button>
+      <button class="btn" onclick="saveReportToFile()">💾 Save Report (.json)</button>
+      <button class="btn outline" onclick="document.getElementById('loadFileInput').click()">📂 Load Report</button>
+      <button class="btn outline" onclick="downloadHTMLSnapshot()">📄 Save as HTML Snapshot</button>
+      <input type="file" id="loadFileInput" accept="application/json" style="display:none;" onchange="loadReportFromFile(event)">
       <span class="status" id="copyStatus"></span>
     </div>
 
@@ -606,47 +611,6 @@ function renderAll(){
     </div>
   </div>`;
 
-  html += `<div class="seclabel">Volume Performance Detail</div>`;
-  html += `<div class="tablewrap"><table>
-    <thead>
-      <tr>
-        <th style="text-align:left; background:#3D1F0A; color:#fff;" rowspan="2">Brand / Group</th>
-        <th colspan="5" style="background:#5A2D0C; color:#fff;">${state.month} ${state.year}${isMid?' (Projected)':''}</th>
-        <th colspan="5" style="background:#3D1F0A; color:#fff;">YTD ${state.month} ${state.year}</th>
-      </tr>
-      <tr>
-        <th style="background:#C49A6C;">${isMid?'Proj. Final':'Month Final'}</th>
-        <th style="background:#C49A6C;">Plan</th>
-        <th style="background:#C49A6C;">LY</th>
-        <th style="background:#C49A6C;">Case Chg</th>
-        <th style="background:#C49A6C;">% Chg LY</th>
-        <th style="background:#C49A6C;">YTD</th>
-        <th style="background:#C49A6C;">YTD Plan</th>
-        <th style="background:#C49A6C;">LYTD</th>
-        <th style="background:#C49A6C;">Case Chg</th>
-        <th style="background:#C49A6C;">% Chg LY</th>
-      </tr>
-    </thead><tbody>`;
-
-  state.rows.forEach(row => {
-    const cls = row.type==='total'||row.type==='subtotal' ? row.type : '';
-    const indentStr = row.indent ? '&nbsp;&nbsp;&nbsp;&nbsp;' : '';
-    html += `<tr class="${cls}">
-      <td class="lbl">${indentStr}${row.label}</td>
-      <td>${row.mtdFinal}</td>
-      <td>${row.mtdPlan}</td>
-      <td>${row.lymtd}</td>
-      <td class="${row.mtdCaseChg>=0?'g':'r'}">${fmtNum(row.mtdCaseChg)}</td>
-      <td class="${row.mtdPctLY>=0?'g':'r'}">${fmtPct(row.mtdPctLY)}</td>
-      <td>${row.ytd}</td>
-      <td>${row.ytdPlan}</td>
-      <td>${row.lytd}</td>
-      <td class="${row.ytdCaseChg>=0?'g':'r'}">${fmtNum(row.ytdCaseChg)}</td>
-      <td class="${row.ytdPctLY>=0?'g':'r'}">${fmtPct(row.ytdPctLY)}</td>
-    </tr>`;
-  });
-  html += `</tbody></table></div>`;
-
   html += `<div class="seclabel">Brand-Level Notes</div><div class="brandgrid">`;
   const brandRows = state.rows.filter(r => r.type === 'brand');
   brandRows.forEach((row, idx) => {
@@ -771,12 +735,9 @@ function saveState(){
   document.getElementById('copyStatus').textContent = "✓ Saved locally.";
   setTimeout(() => document.getElementById('copyStatus').textContent = '', 3000);
 }
-function loadState(){
-  const raw = localStorage.getItem('abd_report_state');
-  if(!raw) return;
-  const payload = JSON.parse(raw);
+function applyLoadedPayload(payload){
   state = payload.state;
-  editableStore = payload.editableStore || editableStore;
+  editableStore = payload.editableStore || {greeting:'', kpiC:['','',''], brandCommentary:{}, initDetail:{}};
   document.getElementById('distributorInp').value = state.distributorName || '';
   document.getElementById('monthSel').value = state.month;
   document.getElementById('yearInp').value = state.year;
@@ -786,15 +747,95 @@ function loadState(){
   document.getElementById('kpiC2').value = state.kpiC[1];
   document.getElementById('kpiC3').value = state.kpiC[2];
   setReportType(state.reportType);
+  document.getElementById('snipPreviewThumb').style.display = 'none';
+  document.getElementById('clearSnipBtn').style.display = 'none';
+  document.getElementById('extractBtn').style.display = 'none';
   if(state.snipData){
     document.getElementById('snipPreviewThumb').src = state.snipData;
     document.getElementById('snipPreviewThumb').style.display = 'block';
     document.getElementById('clearSnipBtn').style.display = 'inline-block';
+    document.getElementById('extractBtn').style.display = 'inline-block';
   }
   renderBrandEditor();
   renderInitEditor();
   renderAll();
 }
+function loadState(){
+  const raw = localStorage.getItem('abd_report_state');
+  if(!raw) return;
+  applyLoadedPayload(JSON.parse(raw));
+}
+
+// ══════════════════════════════════════════
+// SAVE / LOAD AS REAL FILES ON DISK
+// ══════════════════════════════════════════
+function sanitizeFilename(s){
+  return (s || 'report').replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '');
+}
+function buildReportFilename(ext){
+  const dist = sanitizeFilename(state.distributorName || 'Distributor');
+  const type = state.reportType === 'mid' ? 'MidMonth' : 'EOM';
+  return `${dist}_${state.month}${state.year}_${type}.${ext}`;
+}
+function triggerDownload(filename, content, mimeType){
+  const blob = new Blob([content], {type: mimeType});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+function saveReportToFile(){
+  const payload = {state, editableStore};
+  const filename = buildReportFilename('json');
+  triggerDownload(filename, JSON.stringify(payload, null, 2), 'application/json');
+  const status = document.getElementById('copyStatus');
+  status.textContent = `✓ Saved as ${filename} — reopen anytime with "Load Report."`;
+  setTimeout(() => status.textContent = '', 6000);
+}
+function loadReportFromFile(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(evt){
+    try{
+      const payload = JSON.parse(evt.target.result);
+      applyLoadedPayload(payload);
+      const status = document.getElementById('copyStatus');
+      status.textContent = `✓ Loaded ${file.name}.`;
+      setTimeout(() => status.textContent = '', 4000);
+    }catch(err){
+      alert("Couldn't read that file — make sure it's a .json report saved from this tool.");
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+function downloadHTMLSnapshot(){
+  const reportEl = document.getElementById('reportRoot');
+  const styleEl = document.querySelector('style').outerHTML;
+  const filename = buildReportFilename('html');
+  const snapshot = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>${(state.distributorName||'Distributor')} — ${state.month} ${state.year} ${state.reportType==='mid'?'Mid-Month':'End of Month'} Report</title>
+${styleEl}
+<style>body{background:#e8e2d6; padding:2rem 1rem;}</style>
+</head>
+<body>
+<div class="report">${reportEl.innerHTML}</div>
+</body>
+</html>`;
+  triggerDownload(filename, snapshot, 'text/html');
+  const status = document.getElementById('copyStatus');
+  status.textContent = `✓ Saved snapshot as ${filename} — a permanent, standalone copy of this report.`;
+  setTimeout(() => status.textContent = '', 6000);
+}
+
 function resetAll(){
   if(!confirm("Reset everything to defaults? This cannot be undone.")) return;
   state = {
