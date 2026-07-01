@@ -694,26 +694,169 @@ function restoreEditableFields(){
 }
 
 async function copyFormatted(){
+
   const reportEl = document.getElementById('reportRoot');
-  const htmlContent = `<div style="font-family:Calibri,sans-serif;">${reportEl.innerHTML}</div>`;
-  const textContent = reportEl.innerText;
+  const clone = reportEl.cloneNode(true);
   const status = document.getElementById('copyStatus');
-  try{
-    const item = new ClipboardItem({
-      "text/html": new Blob([htmlContent], {type:"text/html"}),
-      "text/plain": new Blob([textContent], {type:"text/plain"})
+
+  clone.querySelectorAll('[contenteditable]').forEach(el => {
+    el.removeAttribute('contenteditable');
+  });
+
+  clone.querySelectorAll('.kpigrid').forEach(el => {
+
+    const cards = [...el.children];
+
+    const table = document.createElement('table');
+    table.setAttribute('role', 'presentation');
+    table.style.width = '100%';
+    table.style.borderCollapse = 'separate';
+    table.style.borderSpacing = '10px';
+
+    const row = document.createElement('tr');
+
+    cards.forEach(card => {
+
+      const td = document.createElement('td');
+
+      td.style.width = '33.3%';
+      td.style.verticalAlign = 'top';
+
+      card.style.background = '#FFFFFF';
+      card.style.border = '1px solid #DDD0BB';
+      card.style.padding = '14px';
+      card.style.borderRadius = '8px';
+
+      td.appendChild(card);
+
+      row.appendChild(td);
+
     });
+
+    table.appendChild(row);
+
+    el.replaceWith(table);
+
+  });
+
+  clone.querySelectorAll('.brandgrid').forEach(el => {
+
+    const cards = [...el.children];
+
+    const table = document.createElement('table');
+    table.setAttribute('role', 'presentation');
+    table.style.width = '100%';
+    table.style.borderCollapse = 'collapse';
+
+    cards.forEach(card => {
+
+      const tr = document.createElement('tr');
+
+      const td = document.createElement('td');
+
+      td.style.paddingBottom = '12px';
+
+      card.style.background = '#FFFFFF';
+      card.style.border = '1px solid #DDD0BB';
+      card.style.padding = '14px';
+      card.style.borderRadius = '8px';
+
+      td.appendChild(card);
+
+      tr.appendChild(td);
+
+      table.appendChild(tr);
+
+    });
+
+    el.replaceWith(table);
+
+  });
+
+  clone.querySelectorAll('.rheader').forEach(el => {
+
+    el.style.background = '#3D1F0A';
+    el.style.color = '#FFFFFF';
+    el.style.padding = '24px';
+    el.style.marginBottom = '18px';
+
+  });
+
+  clone.querySelectorAll('.initrow').forEach(el => {
+
+    el.style.border = '1px solid #DDD0BB';
+    el.style.background = '#FFFFFF';
+    el.style.padding = '12px';
+    el.style.marginBottom = '10px';
+
+  });
+
+  clone.querySelectorAll('img').forEach(img => {
+
+    img.style.maxWidth = '100%';
+    img.style.height = 'auto';
+
+  });
+
+  const htmlContent = `
+    <div style="
+      font-family:Calibri,Arial,sans-serif;
+      max-width:900px;
+      color:#1A1208;
+      background:#FAF7F2;
+      padding:12px;
+    ">
+      ${clone.innerHTML}
+    </div>
+  `;
+
+  const textContent = clone.innerText;
+
+  try{
+
+    const item = new ClipboardItem({
+
+      "text/html": new Blob(
+        [htmlContent],
+        {type:"text/html"}
+      ),
+
+      "text/plain": new Blob(
+        [textContent],
+        {type:"text/plain"}
+      )
+
+    });
+
     await navigator.clipboard.write([item]);
-    status.textContent = "✓ Copied! Paste into Word, Outlook, or Email.";
+
+    status.textContent =
+      "✓ Outlook-friendly report copied.";
+
   }catch(e){
+
     try{
+
       await navigator.clipboard.writeText(textContent);
-      status.textContent = "Copied as plain text (formatted copy not supported in this browser).";
+
+      status.textContent =
+        "Copied as plain text.";
+
     }catch(e2){
-      status.textContent = "Copy failed — try selecting the report manually.";
+
+      status.textContent =
+        "Copy failed.";
+
     }
+
   }
-  setTimeout(() => status.textContent = '', 5000);
+
+  setTimeout(() => {
+
+    status.textContent = '';
+
+  }, 5000);
+
 }
 
 function saveState(){
