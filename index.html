@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Alliance Beverage — Report Generator</title>
+<title>Distributor Volume Report Generator</title>
 <style>
 :root{
   --brown-dark:#3D1F0A; --brown-mid:#5A2D0C; --brown-light:#7A4A1E;
@@ -140,12 +140,14 @@ tr.total td, tr.subtotal td{font-weight:600; background:var(--lightgray);}
 <div class="app">
 
   <div class="panel">
-    <h1>Alliance Beverage Report Generator</h1>
+    <h1>Distributor Volume Report Generator</h1>
     <div class="tagline">Delicato Family Wines · Mid-Month &amp; EOM Volume Reports</div>
 
     <div class="section">
       <div class="section-head" onclick="toggleSection(this)">Report Setup <span>▾</span></div>
       <div class="section-body">
+        <label>Distributor Name</label>
+        <input type="text" id="distributorInp" placeholder="e.g. Acme Beverage Distributing" oninput="renderAll()">
         <label>Report Type</label>
         <div class="toggle-row">
           <button id="btnMid" class="active" onclick="setReportType('mid')">Mid-Month</button>
@@ -203,7 +205,7 @@ Core Portfolio	178	163	213	(35)	(16%)	734	916	839	(106)	(13%)
     <div class="section">
       <div class="section-head" onclick="toggleSection(this)">Data Snapshot Image <span>▾</span></div>
       <div class="section-body">
-        <div class="hint">This image appears in the report between Brand Notes and Initiatives. You can also try pulling the numbers straight from it (Beta) — always double-check extracted numbers before using them.</div>
+        <div class="hint">This image appears in the report between Brand Notes and Initiatives. You can also try pulling the numbers straight from it (Beta) — extraction matches against whatever brand rows currently exist in your table below, so add/rename your rows for this distributor first. Always double-check extracted numbers before using them.</div>
 
         <label>Option A — Paste screenshot (Ctrl+V)</label>
         <div id="pasteZone" tabindex="0">Click here, then press Ctrl+V to paste a copied screenshot</div>
@@ -291,6 +293,7 @@ function mkRow(label,type,indent,mf,mp,lymtd,cc1,pl1,ytd,ytdp,lytd,cc2,pl2){
 
 let state = {
   reportType: "mid",
+  distributorName: "",
   month: "July", year: "2026", prepared: "July 2026",
   halfPct: "",
   rows: defaultRows(),
@@ -399,9 +402,12 @@ function parsePastedData(){
       return neg ? -num : num;
     };
     const label = cells[0];
-    const isSubtotal = /^(Core Portfolio|Core Glass)$/i.test(label);
-    const isTotal = /^(Total DFW|Transcendent Wines)$/i.test(label);
-    const type = isSubtotal ? 'subtotal' : isTotal ? 'total' : 'brand';
+    // Generic detection: only auto-flags rows containing "total" as Total rows.
+    // Subtotal rows (like Core Portfolio/Core Glass) vary by distributor and
+    // can't be reliably guessed — use the row's dropdown after parsing to
+    // mark any row as Total / Subtotal / Brand.
+    const isTotal = /total/i.test(label);
+    const type = isTotal ? 'total' : 'brand';
     const indent = type === 'brand' ? 1 : 0;
     newRows.push(mkRow(
       label, type, indent,
@@ -462,8 +468,9 @@ function clearSnip(){
 // the Paste Data box for manual verification,
 // never writes directly into the live table.
 // ══════════════════════════════════════════
-const ROW_LABELS = ["Total DFW","Core Portfolio","Core Glass","Diamond Collection",
-  "The Wines of Francis Coppola","Relax","Schmitt Sohne","Transcendent Wines","Director's Cut"];
+// Row labels for OCR matching are pulled dynamically from whatever rows are
+// currently in the table — so this works for any distributor's brand list,
+// not just a fixed set. Add/edit your rows first, then run extraction.
 
 async function runOCRExtraction(){
   const statusEl = document.getElementById('ocrStatus');
@@ -477,24 +484,25 @@ async function runOCRExtraction(){
   try{
     const result = await Tesseract.recognize(state.snipData, 'eng');
     const text = result.data.text;
-    const reconstructed = reconstructTableFromOCR(text);
+    const currentLabels = state.rows.map(r => r.label);
+    const reconstructed = reconstructTableFromOCR(text, currentLabels);
     document.getElementById('pasteBox').value = reconstructed.tsv;
     const pasteBody = document.getElementById('pasteBox').closest('.section').querySelector('.section-body');
     pasteBody.classList.remove('collapsed');
-    statusEl.innerHTML = `Extraction complete — <b>${reconstructed.matched} of ${ROW_LABELS.length} rows recognized.</b> Carefully check every number in the Paste Data box above before clicking "Parse &amp; Fill Table." OCR can misread digits, especially in colored or small text.`;
+    statusEl.innerHTML = `Extraction complete — <b>${reconstructed.matched} of ${currentLabels.length} rows recognized.</b> Carefully check every number in the Paste Data box above before clicking "Parse &amp; Fill Table." OCR can misread digits, especially in colored or small text.`;
   }catch(err){
     statusEl.textContent = "Extraction failed: " + err.message + ". Try the Paste Data (Excel) method instead.";
   }
   document.getElementById('extractBtn').disabled = false;
 }
 
-function reconstructTableFromOCR(rawText){
+function reconstructTableFromOCR(rawText, rowLabels){
   const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
   let matched = 0;
   const outLines = [];
   const norm = s => s.toLowerCase().replace(/[^a-z]/g,'');
 
-  ROW_LABELS.forEach(label => {
+  rowLabels.forEach(label => {
     const targetNorm = norm(label).slice(0, Math.min(8, norm(label).length));
     const foundLine = lines.find(l => norm(l).includes(targetNorm));
     if(!foundLine){
@@ -539,6 +547,7 @@ function addInitiative(){
 }
 
 function renderAll(){
+  state.distributorName = document.getElementById('distributorInp').value.trim();
   state.month = document.getElementById('monthSel').value;
   state.year = document.getElementById('yearInp').value;
   state.prepared = document.getElementById('preparedInp').value;
@@ -550,20 +559,22 @@ function renderAll(){
   document.getElementById('halfHint').textContent = `${state.month} falls in ${half} (${half==='H1'?'Jan–Jun':'Jul–Dec'}).`;
 
   const isMid = state.reportType === 'mid';
-  const totalRow = state.rows.find(r => r.label.toLowerCase().includes('total dfw')) || state.rows[0];
+  const totalRow = state.rows.find(r => r.type === 'total') || state.rows[0];
 
   const mtdPct = pctAchieved(totalRow.mtdFinal, totalRow.mtdPlan);
   const ytdPct = pctAchieved(totalRow.ytd, totalRow.ytdPlan);
 
   let html = '';
 
+  const distName = state.distributorName || "[Distributor Name]";
+
   html += `<div class="rheader">
     <div>
-      <div class="eyebrow">ALLIANCE BEVERAGE DISTRIBUTING</div>
+      <div class="eyebrow">${distName.toUpperCase()}</div>
       <h2>Delicato Family Wines — ${isMid?'Mid-Month':'End of Month'} Report</h2>
       <div class="sub">${state.month} ${state.year} Volume Performance ${isMid?'— Mid-Month Projection':'Recap'}</div>
     </div>
-    <div class="right">Prepared: ${state.prepared}<br>Distributor: Alliance Beverage<br>Confidential</div>
+    <div class="right">Prepared: ${state.prepared}<br>Distributor: ${distName}<br>Confidential</div>
   </div>`;
 
   if(isMid){
@@ -576,7 +587,7 @@ function renderAll(){
   html += `<div class="seclabel">Total Portfolio — ${state.month} ${state.year} ${isMid?'Mid-Month Projection':'Snapshot'}</div>`;
   html += `<div class="kpigrid">
     <div class="kpi">
-      <div class="l">Total DFW — ${isMid?'Projected Close':'Month Final'}</div>
+      <div class="l">${totalRow.label} — ${isMid?'Projected Close':'Month Final'}</div>
       <div class="v ${pctColor(mtdPct)}">${totalRow.mtdFinal}</div>
       <div class="s">Plan: ${totalRow.mtdPlan} &nbsp;|&nbsp; ${mtdPct}% of Plan</div>
       <div class="c" contenteditable="true" id="kpiC1el">${state.kpiC[0]}</div>
@@ -654,7 +665,7 @@ function renderAll(){
   const ytdGap = totalRow.ytdPlan - totalRow.ytd;
   html += `<div class="bcard">
     <div class="bhead"><div class="bname">Portfolio Summary</div><div class="badge ${pctColor(ytdPct)==='g'?'green':pctColor(ytdPct)==='a'?'amber':'red'}">${ytdPct>=100?'On Plan':'Watch'}</div></div>
-    <div class="statrow">Total DFW ${isMid?'Proj.':'Final'}: <b>${mtdPct}% of Plan</b></div>
+    <div class="statrow">${totalRow.label} ${isMid?'Proj.':'Final'}: <b>${mtdPct}% of Plan</b></div>
     <div class="statrow">YTD vs. Plan: <b>${ytdPct}% &nbsp;|&nbsp; ${ytdGap>=0?ytdGap+' case gap':Math.abs(ytdGap)+' cases ahead'}</b></div>
     <div class="statrow">vs. LY (Month): <b class="${totalRow.mtdPctLY>=0?'g':'r'}">${fmtPct(totalRow.mtdPctLY)}</b></div>
     <div class="bcommentary" contenteditable="true" id="bc_summary"></div>
@@ -679,7 +690,7 @@ function renderAll(){
     </div>`;
   });
 
-  html += `<div class="rfooter">Alliance Beverage Distributing &nbsp;·&nbsp; Delicato Family Wines &nbsp;·&nbsp; ${state.month} ${state.year} ${isMid?'Mid-Month':'End of Month'} Report &nbsp;·&nbsp; Confidential</div>`;
+  html += `<div class="rfooter">${distName} &nbsp;·&nbsp; Delicato Family Wines &nbsp;·&nbsp; ${state.month} ${state.year} ${isMid?'Mid-Month':'End of Month'} Report &nbsp;·&nbsp; Confidential</div>`;
 
   document.getElementById('reportRoot').innerHTML = html;
 
@@ -766,6 +777,7 @@ function loadState(){
   const payload = JSON.parse(raw);
   state = payload.state;
   editableStore = payload.editableStore || editableStore;
+  document.getElementById('distributorInp').value = state.distributorName || '';
   document.getElementById('monthSel').value = state.month;
   document.getElementById('yearInp').value = state.year;
   document.getElementById('preparedInp').value = state.prepared;
@@ -786,7 +798,7 @@ function loadState(){
 function resetAll(){
   if(!confirm("Reset everything to defaults? This cannot be undone.")) return;
   state = {
-    reportType:"mid", month:"July", year:"2026", prepared:"July 2026", halfPct:"",
+    reportType:"mid", distributorName:"", month:"July", year:"2026", prepared:"July 2026", halfPct:"",
     rows: defaultRows(), snipData:null, kpiC:["","",""], greeting:"",
     initiatives:[
       {brand:"Diamond Collection", detail:""},{brand:"Relax", detail:""},
@@ -795,6 +807,7 @@ function resetAll(){
     ]
   };
   editableStore = {greeting:'', kpiC:['','',''], brandCommentary:{}, initDetail:{}};
+  document.getElementById('distributorInp').value = "";
   document.getElementById('monthSel').value = "July";
   document.getElementById('yearInp').value = "2026";
   document.getElementById('preparedInp').value = "July 2026";
