@@ -93,12 +93,6 @@ textarea{resize:vertical; min-height:60px;}
 .kpi .c[contenteditable=true]:focus{outline:1px dashed var(--gold);}
 .v.green{color:var(--green);} .v.amber{color:var(--amber);} .v.red{color:var(--red);}
 
-.tablewrap{border:1px solid var(--border); border-radius:8px; overflow-x:auto; margin-bottom:1.25rem; background:#fff;}
-table{width:100%; border-collapse:collapse; font-size:11px; min-width:820px;}
-th{padding:6px; text-align:center; font-weight:600;}
-td{padding:6px; text-align:center; border-bottom:1px solid var(--border);}
-td.lbl{text-align:left; font-weight:500;}
-tr.total td, tr.subtotal td{font-weight:600; background:var(--lightgray);}
 .g{color:var(--green);} .a{color:var(--amber);} .r{color:var(--red);}
 
 .brandgrid{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:1rem;}
@@ -236,13 +230,6 @@ Core Portfolio	178	163	213	(35)	(16%)	734	916	839	(106)	(13%)
     </div>
 
     <div class="section">
-      <div class="section-head" onclick="toggleSection(this)">Greeting Text <span>▾</span></div>
-      <div class="section-body">
-        <textarea id="greetingInp" oninput="renderAll()" style="min-height:90px;"></textarea>
-      </div>
-    </div>
-
-    <div class="section">
       <div class="section-head" onclick="toggleSection(this)">Initiatives <span>▾</span></div>
       <div class="section-body" id="initEditorBody"></div>
       <div class="section-body" style="padding-top:0;">
@@ -279,8 +266,8 @@ Core Portfolio	178	163	213	(35)	(16%)	734	916	839	(106)	(13%)
 function defaultRows(){
   return [
     mkRow("Total DFW","total",0,184,165,222,-38,-17,745,928,864,-119,-14),
-    mkRow("Core Portfolio","subtotal",0,178,163,213,-35,-16,734,916,839,-106,-13),
-    mkRow("Core Glass","subtotal",0,176,162,213,-32,-16,725,907,829,-105,-13),
+    mkRow("Core Portfolio","brand",0,178,163,213,-35,-16,734,916,839,-106,-13),
+    mkRow("Core Glass","brand",0,176,162,213,-32,-16,725,907,829,-105,-13),
     mkRow("Diamond Collection","brand",1,118,98,121,-3,-3,442,589,481,-39,-8),
     mkRow("The Wines of Francis Coppola","brand",1,5,3,3,2,67,18,20,20,-2,-10),
     mkRow("Relax","brand",1,41,34,58,-17,-29,184,169,194,9,-5),
@@ -376,9 +363,8 @@ function renderBrandEditor(){
       </div>
       <div class="rowmeta">
         <select onchange="updateRow(${i},'type',this.value)">
-          <option value="total" ${row.type==='total'?'selected':''}>Total/Bold Row</option>
-          <option value="subtotal" ${row.type==='subtotal'?'selected':''}>Subtotal</option>
-          <option value="brand" ${row.type==='brand'?'selected':''}>Brand (indented, gets card)</option>
+          <option value="total" ${row.type==='total'?'selected':''}>Total Row (drives KPI tiles)</option>
+          <option value="brand" ${row.type==='brand'||row.type==='subtotal'?'selected':''}>Brand (gets a note card)</option>
         </select>
       </div>
     `;
@@ -587,7 +573,7 @@ function renderAll(){
     ${state.halfPct ? ` ${half} time elapsed: ${state.halfPct}.` : ''} All figures subject to change at month close.</div>`;
   }
 
-  html += `<div class="greeting" contenteditable="true" id="greetingEl">${state.greeting || defaultGreeting(isMid, state.month, half, state.halfPct, ytdPct, distName)}</div>`;
+  html += `<div class="greeting" contenteditable="true" id="greetingEl" title="Click to edit this greeting directly">${state.greeting || defaultGreeting(isMid, state.month, half, state.halfPct, ytdPct, distName)}</div>`;
 
   html += `<div class="seclabel">Total Portfolio — ${state.month} ${state.year} ${isMid?'Mid-Month Projection':'Snapshot'}</div>`;
   html += `<div class="kpigrid">
@@ -612,7 +598,7 @@ function renderAll(){
   </div>`;
 
   html += `<div class="seclabel">Brand-Level Notes</div><div class="brandgrid">`;
-  const brandRows = state.rows.filter(r => r.type === 'brand');
+  const brandRows = state.rows.filter(r => r !== totalRow);
   brandRows.forEach((row, idx) => {
     const mtdP = pctAchieved(row.mtdFinal, row.mtdPlan);
     const ytdP = pctAchieved(row.ytd, row.ytdPlan);
