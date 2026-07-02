@@ -23,6 +23,38 @@ body{font-family:'Segoe UI',Calibri,sans-serif; background:#e8e2d6; color:var(--
 .panel h1{font-size:18px; color:var(--brown-dark); margin-bottom:4px;}
 .panel .tagline{font-size:12px; color:var(--text-light); margin-bottom:1rem;}
 .section{border:1px solid var(--border); border-radius:8px; margin-bottom:1rem; overflow:hidden;}
+
+.paste-glow{
+  position:relative;
+  border-radius:10px;
+  margin-bottom:1rem;
+  padding:3px;
+}
+.paste-glow .section{ margin-bottom:0; }
+.paste-glow::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius:10px;
+  padding:2.5px;
+  background:linear-gradient(120deg, #a855f7, #d8b4fe, #7c3aed, #c084fc, #a855f7);
+  background-size:300% 300%;
+  -webkit-mask:linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite:xor;
+  mask-composite:exclude;
+  animation:pasteGlowShift 3.5s ease-in-out infinite, pasteGlowPulse 2s ease-in-out infinite;
+  pointer-events:none;
+  z-index:1;
+}
+@keyframes pasteGlowShift{
+  0%{background-position:0% 50%;}
+  50%{background-position:100% 50%;}
+  100%{background-position:0% 50%;}
+}
+@keyframes pasteGlowPulse{
+  0%, 100%{box-shadow:0 0 6px 1px rgba(168,85,247,0.35);}
+  50%{box-shadow:0 0 16px 4px rgba(168,85,247,0.75);}
+}
 .section-head{background:var(--lightgray); padding:8px 12px; font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:0.04em; color:var(--brown-mid); cursor:pointer; display:flex; justify-content:space-between; align-items:center;}
 .section-body{padding:12px;}
 .section-body.collapsed{display:none;}
@@ -97,7 +129,7 @@ textarea{resize:vertical; min-height:60px;}
 .kpi .c[contenteditable=true]:focus{outline:1px dashed var(--gold);}
 .v.green{color:var(--green);} .v.amber{color:var(--amber);} .v.red{color:var(--red);}
 
-.g{color:var(--green);} .a{color:var(--amber);} .r{color:var(--red);}
+.g{color:var(--green) !important;} .a{color:var(--amber) !important;} .r{color:var(--red) !important;}
 
 .brandgrid{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:1rem;}
 .bcard{background:#fff; border:1px solid var(--border); border-radius:8px; padding:14px 16px;}
@@ -178,7 +210,7 @@ textarea{resize:vertical; min-height:60px;}
       </div>
     </div>
 
-    <div class="section">
+    <div class="paste-glow"><div class="section">
       <div class="section-head" onclick="toggleSection(this)">Paste Data From Sheet/Excel <span>▾</span></div>
       <div class="section-body">
         <div class="hint">Paste only the <b>brand/data rows</b> (brand name + numbers), one per line, tab-separated. <b>Do not include the column header row</b> (e.g. "Month Final, Month Plan, % Plan Achieved...") or the report's title row at the very top. Those get auto-detected and skipped if pasted anyway, but leaving them out is cleaner. You can copy the full data rows exactly as they appear, including both "% Plan Achieved" columns. Expected data order per row: Label, Month Final, Month Plan, [%Plan], LYMTD, Case Chg, %Chg LY, YTD, YTD Plan, [%Plan], LYTD, Case Chg, %Chg LY.</div>
@@ -187,8 +219,9 @@ Core Portfolio	100	100	100	0	0%	100	100	100	0	0%
 ..."></textarea>
         <button class="btn gold" style="margin-top:6px;" onclick="parsePastedData()">Parse &amp; Fill Table</button>
         <div class="hint">This replaces all current brand rows with the parsed data.</div>
+        <div class="hint" id="pasteStatus"></div>
       </div>
-    </div>
+    </div></div>
 
     <div class="section">
       <div class="section-head" onclick="toggleSection(this)">Brand Rows <span>▾</span></div>
@@ -201,7 +234,7 @@ Core Portfolio	100	100	100	0	0%	100	100	100	0	0%
     <div class="section">
       <div class="section-head" onclick="toggleSection(this)">Data Snapshot Image <span>▾</span></div>
       <div class="section-body">
-        <div class="hint">This image appears in the report between Brand Notes and Initiatives. You can also try pulling the numbers straight from it (Beta). Extraction matches against whatever brand rows currently exist in your table below, so add/rename your rows for this distributor first. Always double-check extracted numbers before using them.</div>
+        <div class="hint">This image appears in the report between Brand Notes and Initiatives.</div>
 
         <label>Option A: Paste screenshot (Ctrl+V)</label>
         <div id="pasteZone" tabindex="0">Click here, then press Ctrl+V to paste a copied screenshot</div>
@@ -212,10 +245,8 @@ Core Portfolio	100	100	100	0	0%	100	100	100	0	0%
         <img id="snipPreviewThumb" class="imgpreview" style="display:none;">
 
         <div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap;">
-          <button class="btn small gold" id="extractBtn" style="display:none;" onclick="runOCRExtraction()">🔍 Extract Numbers (Beta)</button>
           <button class="btn small danger" style="display:none;" id="clearSnipBtn" onclick="clearSnip()">Remove Image</button>
         </div>
-        <div class="hint" id="ocrStatus"></div>
       </div>
     </div>
 
@@ -267,7 +298,6 @@ Core Portfolio	100	100	100	0	0%	100	100	100	0	0%
 
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.4/dist/tesseract.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -443,7 +473,7 @@ function parsePastedData(){
   if(!txt) return;
   const lines = txt.split('\n').filter(l => l.trim());
   const newRows = [];
-  const status = document.getElementById('ocrStatus');
+  const status = document.getElementById('pasteStatus');
   let format12 = 0, format10 = 0, skipped = 0;
 
   const parseParen = s => {
@@ -523,8 +553,6 @@ function setSnipImage(dataUrl){
   document.getElementById('snipPreviewThumb').src = dataUrl;
   document.getElementById('snipPreviewThumb').style.display = 'block';
   document.getElementById('clearSnipBtn').style.display = 'inline-block';
-  document.getElementById('extractBtn').style.display = 'inline-block';
-  document.getElementById('ocrStatus').textContent = '';
   renderAll();
 }
 function handleImageUpload(e){
@@ -552,71 +580,7 @@ function clearSnip(){
   document.getElementById('snipInput').value = '';
   document.getElementById('snipPreviewThumb').style.display = 'none';
   document.getElementById('clearSnipBtn').style.display = 'none';
-  document.getElementById('extractBtn').style.display = 'none';
-  document.getElementById('ocrStatus').textContent = '';
   renderAll();
-}
-
-// ══════════════════════════════════════════
-// OCR EXTRACTION (Beta): routes results into
-// the Paste Data box for manual verification,
-// never writes directly into the live table.
-// ══════════════════════════════════════════
-// Row labels for OCR matching are pulled dynamically from whatever rows are
-// currently in the table, so this works for any distributor's brand list,
-// not just a fixed set. Add/edit your rows first, then run extraction.
-
-async function runOCRExtraction(){
-  const statusEl = document.getElementById('ocrStatus');
-  if(typeof Tesseract === 'undefined'){
-    statusEl.textContent = "OCR engine failed to load. Check your internet connection and try again.";
-    return;
-  }
-  if(!state.snipData) return;
-  statusEl.textContent = "Reading image... this can take 15–30 seconds.";
-  document.getElementById('extractBtn').disabled = true;
-  try{
-    const result = await Tesseract.recognize(state.snipData, 'eng');
-    const text = result.data.text;
-    const currentLabels = state.rows.map(r => r.label);
-    const reconstructed = reconstructTableFromOCR(text, currentLabels);
-    document.getElementById('pasteBox').value = reconstructed.tsv;
-    const pasteBody = document.getElementById('pasteBox').closest('.section').querySelector('.section-body');
-    pasteBody.classList.remove('collapsed');
-    statusEl.innerHTML = `Extraction complete: <b>${reconstructed.matched} of ${currentLabels.length} rows recognized.</b> Carefully check every number in the Paste Data box above before clicking "Parse &amp; Fill Table." OCR can misread digits, especially in colored or small text.`;
-  }catch(err){
-    statusEl.textContent = "Extraction failed: " + err.message + ". Try the Paste Data (Excel) method instead.";
-  }
-  document.getElementById('extractBtn').disabled = false;
-}
-
-function reconstructTableFromOCR(rawText, rowLabels){
-  const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
-  let matched = 0;
-  const outLines = [];
-  const norm = s => s.toLowerCase().replace(/[^a-z]/g,'');
-
-  rowLabels.forEach(label => {
-    const targetNorm = norm(label).slice(0, Math.min(8, norm(label).length));
-    const foundLine = lines.find(l => norm(l).includes(targetNorm));
-    if(!foundLine){
-      outLines.push(label + "\t[not found, enter manually]");
-      return;
-    }
-    // Pull numeric tokens: handles (123), -123, 45%, (45%), 1,234
-    const tokens = foundLine.match(/\(?-?\d[\d,]*\.?\d*%?\)?/g) || [];
-    if(tokens.length >= 12){
-      // Drop the 2 computed "% Plan Achieved" columns (index 2 and 8 of the 12 raw reads)
-      const picked = [tokens[0],tokens[1],tokens[3],tokens[4],tokens[5],tokens[6],tokens[7],tokens[9],tokens[10],tokens[11]];
-      outLines.push(label + "\t" + picked.join("\t"));
-      matched++;
-    } else if(tokens.length >= 10){
-      outLines.push(label + "\t" + tokens.join("\t") + "\t[check column count, found " + tokens.length + ", expected 12]");
-    } else {
-      outLines.push(label + "\t[incomplete read, found " + tokens.length + " numbers, enter manually]");
-    }
-  });
-  return {tsv: outLines.join("\n"), matched};
 }
 
 function renderInitEditor(){
@@ -971,12 +935,10 @@ function applyLoadedPayload(payload){
   setReportType(state.reportType);
   document.getElementById('snipPreviewThumb').style.display = 'none';
   document.getElementById('clearSnipBtn').style.display = 'none';
-  document.getElementById('extractBtn').style.display = 'none';
   if(state.snipData){
     document.getElementById('snipPreviewThumb').src = state.snipData;
     document.getElementById('snipPreviewThumb').style.display = 'block';
     document.getElementById('clearSnipBtn').style.display = 'inline-block';
-    document.getElementById('extractBtn').style.display = 'inline-block';
   }
   renderBrandEditor();
   renderInitEditor();
