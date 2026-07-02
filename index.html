@@ -232,7 +232,7 @@ Core Portfolio	100	100	100	0	0%	100	100	100	0	0%
     <div class="section">
       <div class="section-head" onclick="toggleSection(this)">Initiatives <span>▾</span></div>
       <div class="section-body" style="padding-bottom:0;">
-        <div class="hint">Auto-builds one initiative per brand, highest month volume first. Core Portfolio, Core Glass, and the Total row are excluded since those aren't individual brands. You can still add anything else manually (like On Premise) or remove any row.</div>
+        <div class="hint">Auto-builds one initiative per brand, highest month volume first. Category/rollup rows (Core Portfolio, Bota Family, Core Glass, Transcendent Wines) and the Total row are excluded since those aren't individual sellable brands. You can still add anything else manually (like On Premise) or remove any row.</div>
         <button class="btn small gold" onclick="syncInitiativesFromVolume()">🔄 Sync by Volume (Highest First)</button>
       </div>
       <div class="section-body" id="initEditorBody"></div>
@@ -276,18 +276,34 @@ function getCurrentMonthYear(){
 
 function defaultRows(){
   // Brand names are kept as working examples so the layout makes sense on
-  // first load. All numeric values are 0 — this page is public (GitHub
-  // Pages), so no real performance data should ever be visible by default.
+  // first load. All numeric values are 0, since this page is public (GitHub
+  // Pages) and no real performance data should ever be visible by default.
+  // This mirrors the real roll-up structure:
+  //   Total DFW
+  //     Core Portfolio
+  //       Bota Family: Bota Box 3L, Bota Mini
+  //       Core Glass: Diamond Collection, Black Stallion Collection,
+  //                   Stoneleigh, Three Finger Jack, Z. Alexander Brown, 1924 GH
+  //     Transcendent Wines: Black Stallion Reserve, Diora, Torbreck
+  // Trim out (remove) any row that isn't represented in whatever
+  // distributor's data you're working with.
   return [
     mkRow("Total DFW","total",0,0,0,0,0,0,0,0,0,0,0),
     mkRow("Core Portfolio","brand",0,0,0,0,0,0,0,0,0,0,0),
+    mkRow("Bota Family","brand",0,0,0,0,0,0,0,0,0,0,0),
+    mkRow("Bota Box 3L","brand",1,0,0,0,0,0,0,0,0,0,0),
+    mkRow("Bota Mini","brand",1,0,0,0,0,0,0,0,0,0,0),
     mkRow("Core Glass","brand",0,0,0,0,0,0,0,0,0,0,0),
     mkRow("Diamond Collection","brand",1,0,0,0,0,0,0,0,0,0,0),
-    mkRow("The Wines of Francis Coppola","brand",1,0,0,0,0,0,0,0,0,0,0),
-    mkRow("Relax","brand",1,0,0,0,0,0,0,0,0,0,0),
-    mkRow("Schmitt Sohne","brand",1,0,0,0,0,0,0,0,0,0,0),
-    mkRow("Transcendent Wines","total",0,0,0,0,0,0,0,0,0,0,0),
-    mkRow("Director's Cut","brand",1,0,0,0,0,0,0,0,0,0,0),
+    mkRow("Black Stallion Collection","brand",1,0,0,0,0,0,0,0,0,0,0),
+    mkRow("Stoneleigh","brand",1,0,0,0,0,0,0,0,0,0,0),
+    mkRow("Three Finger Jack","brand",1,0,0,0,0,0,0,0,0,0,0),
+    mkRow("Z. Alexander Brown","brand",1,0,0,0,0,0,0,0,0,0,0),
+    mkRow("1924 GH","brand",1,0,0,0,0,0,0,0,0,0,0),
+    mkRow("Transcendent Wines","brand",0,0,0,0,0,0,0,0,0,0,0),
+    mkRow("Black Stallion Reserve","brand",1,0,0,0,0,0,0,0,0,0,0),
+    mkRow("Diora","brand",1,0,0,0,0,0,0,0,0,0,0),
+    mkRow("Torbreck","brand",1,0,0,0,0,0,0,0,0,0,0),
   ];
 }
 function mkRow(label,type,indent,mf,mp,lymtd,cc1,pl1,ytd,ytdp,lytd,cc2,pl2){
@@ -307,11 +323,7 @@ let state = {
   kpiC: ["","",""],
   greeting: "",
   initiatives: [
-    {brand:"Diamond Collection", detail:""},
-    {brand:"Relax", detail:""},
-    {brand:"Schmitt Sohne", detail:""},
-    {brand:"The Wines of Francis Coppola", detail:""},
-    {brand:"On Premise", detail:""},
+    {brand:"On Premise", detail:"", auto:false},
   ]
 };
 
@@ -383,7 +395,32 @@ function renderBrandEditor(){
     body.appendChild(div);
   });
 }
-function updateRow(i, field, val){ state.rows[i][field] = val; renderAll(); }
+// Default placement rule: a newly-named brand goes under Bota Family if its
+// name contains "Bota", otherwise it goes under Core Glass. This only fires
+// the first time a freshly-added row gets its name typed in (detected by
+// the placeholder "New Brand" label), so renaming an existing, already
+// positioned row later never moves it around unexpectedly.
+function updateRow(i, field, val){
+  const wasPlaceholder = field === 'label' && state.rows[i].label === 'New Brand';
+  state.rows[i][field] = val;
+
+  if(wasPlaceholder && val.trim() && val.trim() !== 'New Brand'){
+    const row = state.rows[i];
+    state.rows.splice(i, 1); // pull it out of wherever it landed
+
+    const isBota = /bota/i.test(val);
+    const anchorLabel = isBota ? 'core glass' : 'transcendent wines'; // insert just before this row
+    const anchorIdx = state.rows.findIndex(r => r.label.trim().toLowerCase() === anchorLabel);
+
+    if(anchorIdx !== -1){
+      state.rows.splice(anchorIdx, 0, row);
+    } else {
+      state.rows.push(row); // no matching category anchor found, fall back to the end
+    }
+    renderBrandEditor();
+  }
+  renderAll();
+}
 function removeRow(i){ state.rows.splice(i,1); renderBrandEditor(); renderAll(); }
 function addBrandRow(){
   state.rows.push(mkRow("New Brand","brand",1,0,0,0,0,0,0,0,0,0,0));
@@ -581,21 +618,26 @@ function removeInit(i){
   renderAll();
 }
 function addInitiative(){
-  state.initiatives.push({brand:"", detail:""});
+  state.initiatives.push({brand:"", detail:"", auto:false});
   renderInitEditor(); renderAll();
 }
 
 // Builds the Initiatives list from current brand rows: excludes roll-up rows
-// (Total, Core Portfolio, Core Glass), sorts the rest by month volume
-// (mtdFinal) highest first. Preserves any commentary already typed for a
-// brand that's still present, and keeps manual entries that don't match any
-// row (like "On Premise") tacked on at the end instead of discarding them.
-// Live-typed commentary on initiatives is cached in editableStore keyed by
-// screen POSITION (init_0, init_1...), same as brand cards. That's fine as
-// long as order never changes. Sync-by-volume intentionally reorders the
-// list, so we must pull any live-typed text back into state.initiatives
-// (keyed by brand NAME) before reordering, or a comment can silently jump
-// onto the wrong brand after the sort.
+// (Total, Core Portfolio, Bota Family, Core Glass, Transcendent Wines),
+// sorts the rest by month volume (mtdFinal) highest first. Preserves any
+// commentary already typed for a brand that's still present, and keeps
+// genuinely manual entries (like "On Premise") tacked on at the end.
+//
+// Each initiative carries an `auto` flag: true if it was generated from a
+// row, false if the user typed it by hand. This matters because a brand
+// name with no matching row is ambiguous on its own; it could be a manual
+// entry (like "On Premise") OR the leftover of a row that's since been
+// deleted. Using row-name matching alone to tell them apart was the old
+// approach and had a real bug: deleting a row that was already synced into
+// Initiatives would NOT remove its initiative on the next sync, since the
+// orphaned entry looked identical to a genuine manual one. The `auto` flag
+// removes the ambiguity: only auto:false entries are ever preserved as
+// "manual extras."
 function flushInitiativeEditsToState(){
   state.initiatives.forEach((init, i) => {
     const domVal = editableStore.initDetail['init_' + i];
@@ -606,31 +648,39 @@ function flushInitiativeEditsToState(){
 function syncInitiativesFromVolume(silent){
   flushInitiativeEditsToState();
   const kpiTotalRow = state.rows.find(r => r.type === 'total'); // the one row driving KPI tiles
-  const EXCLUDE_NAMES = /^(core portfolio|core glass)$/i;
+  const EXCLUDE_NAMES = /^(core portfolio|core glass|bota family|transcendent wines)$/i;
   const eligible = state.rows.filter(r => r !== kpiTotalRow && !EXCLUDE_NAMES.test(r.label.trim()));
   const sorted = [...eligible].sort((a,b) => b.mtdFinal - a.mtdFinal);
 
   const oldByName = {};
   state.initiatives.forEach(init => { oldByName[(init.brand||'').trim().toLowerCase()] = init.detail; });
 
-  const rowLabels = new Set(state.rows.map(r => r.label.trim().toLowerCase()));
-  const manualExtras = state.initiatives.filter(init => {
-    const key = (init.brand||'').trim().toLowerCase();
-    return key && !rowLabels.has(key);
-  });
+  // Only genuinely manual entries survive a re-sync. Anything previously
+  // auto-generated gets dropped here and rebuilt fresh below, so a deleted
+  // row's leftover initiative actually disappears instead of lingering.
+  // Old saved .json files predate the `auto` field entirely (undefined),
+  // so treat "not explicitly auto:true" as manual to preserve them correctly.
+  const manualExtras = state.initiatives.filter(init => init.auto !== true);
 
   const newList = sorted.map(r => ({
     brand: r.label,
-    detail: oldByName[r.label.trim().toLowerCase()] || ""
+    detail: oldByName[r.label.trim().toLowerCase()] || "",
+    auto: true
   }));
 
-  state.initiatives = [...newList, ...manualExtras];
+  // Old saved files predate the `auto` field, so on a file's first sync
+  // everything looks "manual." Dedupe against the freshly-built list by
+  // name so that doesn't produce duplicate cards for the same brand.
+  const newListNames = new Set(newList.map(n => n.brand.trim().toLowerCase()));
+  const dedupedManualExtras = manualExtras.filter(init => !newListNames.has((init.brand||'').trim().toLowerCase()));
+
+  state.initiatives = [...newList, ...dedupedManualExtras];
   editableStore.initDetail = {}; // positions just changed, old position-keyed cache is now invalid
   renderInitEditor();
   renderAll();
   if(!silent){
     const status = document.getElementById('copyStatus');
-    status.textContent = `✓ Synced ${newList.length} brand initiative(s) by volume` + (manualExtras.length ? `, kept ${manualExtras.length} manual entry(ies).` : '.');
+    status.textContent = `✓ Synced ${newList.length} brand initiative(s) by volume` + (dedupedManualExtras.length ? `, kept ${dedupedManualExtras.length} manual entry(ies).` : '.');
     setTimeout(() => { if(status.textContent.startsWith('✓')) status.textContent=''; }, 6000);
   }
 }
@@ -950,9 +1000,7 @@ function resetAll(){
     reportType:"mid", distributorName:"", month:curMonth, year:curYear, prepared:`${curMonth} ${curYear}`, halfPct:"",
     rows: defaultRows(), snipData:null, kpiC:["","",""], greeting:"",
     initiatives:[
-      {brand:"Diamond Collection", detail:""},{brand:"Relax", detail:""},
-      {brand:"Schmitt Sohne", detail:""},{brand:"The Wines of Francis Coppola", detail:""},
-      {brand:"On Premise", detail:""}
+      {brand:"On Premise", detail:"", auto:false}
     ]
   };
   editableStore = {greeting:'', kpiC:['','',''], brandCommentary:{}, initDetail:{}};
