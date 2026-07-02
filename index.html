@@ -231,6 +231,10 @@ Core Portfolio	178	163	213	(35)	(16%)	734	916	839	(106)	(13%)
 
     <div class="section">
       <div class="section-head" onclick="toggleSection(this)">Initiatives <span>▾</span></div>
+      <div class="section-body" style="padding-bottom:0;">
+        <div class="hint">Auto-builds one initiative per brand, highest month volume first. Core Portfolio, Core Glass, and the Total row are excluded — those aren't individual brands. You can still add anything else manually (like On Premise) or remove any row.</div>
+        <button class="btn small gold" onclick="syncInitiativesFromVolume()">🔄 Sync by Volume (Highest First)</button>
+      </div>
       <div class="section-body" id="initEditorBody"></div>
       <div class="section-body" style="padding-top:0;">
         <button class="btn small outline" onclick="addInitiative()">+ Add Initiative</button>
@@ -431,6 +435,7 @@ function parsePastedData(){
   if(newRows.length){
     state.rows = newRows;
     renderBrandEditor();
+    syncInitiativesFromVolume(true);
     renderAll();
     if(status){
       const fmtNote = format12 ? `Detected full ${format12}-row table (auto-skipped the two "% Plan Achieved" columns).`
@@ -559,10 +564,66 @@ function renderInitEditor(){
   });
 }
 function updateInit(i, field, val){ state.initiatives[i][field] = val; renderAll(); }
-function removeInit(i){ state.initiatives.splice(i,1); renderInitEditor(); renderAll(); }
+function removeInit(i){
+  flushInitiativeEditsToState();      // save any live-typed text into state by name first
+  state.initiatives.splice(i,1);
+  editableStore.initDetail = {};      // positions shifted for everything after i — old cache invalid
+  renderInitEditor();
+  renderAll();
+}
 function addInitiative(){
   state.initiatives.push({brand:"", detail:""});
   renderInitEditor(); renderAll();
+}
+
+// Builds the Initiatives list from current brand rows: excludes roll-up rows
+// (Total, Core Portfolio, Core Glass), sorts the rest by month volume
+// (mtdFinal) highest first. Preserves any commentary already typed for a
+// brand that's still present, and keeps manual entries that don't match any
+// row (like "On Premise") tacked on at the end instead of discarding them.
+// Live-typed commentary on initiatives is cached in editableStore keyed by
+// screen POSITION (init_0, init_1...), same as brand cards. That's fine as
+// long as order never changes. Sync-by-volume intentionally reorders the
+// list, so we must pull any live-typed text back into state.initiatives
+// (keyed by brand NAME) before reordering, or a comment can silently jump
+// onto the wrong brand after the sort.
+function flushInitiativeEditsToState(){
+  state.initiatives.forEach((init, i) => {
+    const domVal = editableStore.initDetail['init_' + i];
+    if(domVal !== undefined) init.detail = domVal;
+  });
+}
+
+function syncInitiativesFromVolume(silent){
+  flushInitiativeEditsToState();
+  const kpiTotalRow = state.rows.find(r => r.type === 'total'); // the one row driving KPI tiles
+  const EXCLUDE_NAMES = /^(core portfolio|core glass)$/i;
+  const eligible = state.rows.filter(r => r !== kpiTotalRow && !EXCLUDE_NAMES.test(r.label.trim()));
+  const sorted = [...eligible].sort((a,b) => b.mtdFinal - a.mtdFinal);
+
+  const oldByName = {};
+  state.initiatives.forEach(init => { oldByName[(init.brand||'').trim().toLowerCase()] = init.detail; });
+
+  const rowLabels = new Set(state.rows.map(r => r.label.trim().toLowerCase()));
+  const manualExtras = state.initiatives.filter(init => {
+    const key = (init.brand||'').trim().toLowerCase();
+    return key && !rowLabels.has(key);
+  });
+
+  const newList = sorted.map(r => ({
+    brand: r.label,
+    detail: oldByName[r.label.trim().toLowerCase()] || ""
+  }));
+
+  state.initiatives = [...newList, ...manualExtras];
+  editableStore.initDetail = {}; // positions just changed — old position-keyed cache is now invalid
+  renderInitEditor();
+  renderAll();
+  if(!silent){
+    const status = document.getElementById('copyStatus');
+    status.textContent = `✓ Synced ${newList.length} brand initiative(s) by volume` + (manualExtras.length ? `, kept ${manualExtras.length} manual entry(ies).` : '.');
+    setTimeout(() => { if(status.textContent.startsWith('✓')) status.textContent=''; }, 6000);
+  }
 }
 
 function renderAll(){
@@ -657,7 +718,7 @@ function renderAll(){
     html += `<div class="snipbox"><div class="placeholder">[ INSERT DATA SNIP HERE ]</div><div class="sub">Upload your screenshot in the left panel, or paste it directly into this spot after copying the report.</div></div>`;
   }
 
-  html += `<div class="seclabel">${half === 'H1' ? 'Upcoming' : 'Remaining'} Initiatives${isMid?' — '+half+' Focus':''}</div>`;
+  html += `<div class="seclabel">Initiatives</div>`;
   state.initiatives.forEach((init, i) => {
     html += `<div class="initrow">
       <div class="initnum">${i+1}</div>
@@ -896,11 +957,13 @@ function resetAll(){
   clearSnip();
   setReportType('mid');
   renderBrandEditor();
+  syncInitiativesFromVolume(true);
   renderInitEditor();
   renderAll();
 }
 
 renderBrandEditor();
+syncInitiativesFromVolume(true);
 renderInitEditor();
 renderAll();
 
