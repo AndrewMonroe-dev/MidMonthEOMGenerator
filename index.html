@@ -180,8 +180,8 @@ textarea{resize:vertical; min-height:60px;}
       <div class="section-head" onclick="toggleSection(this)">Paste Data From Sheet/Excel <span>▾</span></div>
       <div class="section-body">
         <div class="hint">Copy your rows straight from the source table (tab-separated, one brand per line) and paste below. <b>You can paste the full table exactly as it appears.</b> The two "% Plan Achieved" columns are auto-detected and skipped, since those are recalculated here. Expected order: Label, Month Final, Month Plan, [%Plan], LYMTD, Case Chg, %Chg LY, YTD, YTD Plan, [%Plan], LYTD, Case Chg, %Chg LY.</div>
-        <textarea id="pasteBox" placeholder="Total DFW	184	165	222	(38)	(17%)	745	928	864	(119)	(14%)
-Core Portfolio	178	163	213	(35)	(16%)	734	916	839	(106)	(13%)
+        <textarea id="pasteBox" placeholder="Total DFW	100	100	100	0	0%	100	100	100	0	0%
+Core Portfolio	100	100	100	0	0%	100	100	100	0	0%
 ..."></textarea>
         <button class="btn gold" style="margin-top:6px;" onclick="parsePastedData()">Parse &amp; Fill Table</button>
         <div class="hint">This replaces all current brand rows with the parsed data.</div>
@@ -269,16 +269,19 @@ Core Portfolio	178	163	213	(35)	(16%)	734	916	839	(106)	(13%)
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
 function defaultRows(){
+  // Brand names are kept as working examples so the layout makes sense on
+  // first load. All numeric values are 0 — this page is public (GitHub
+  // Pages), so no real performance data should ever be visible by default.
   return [
-    mkRow("Total DFW","total",0,184,165,222,-38,-17,745,928,864,-119,-14),
-    mkRow("Core Portfolio","brand",0,178,163,213,-35,-16,734,916,839,-106,-13),
-    mkRow("Core Glass","brand",0,176,162,213,-32,-16,725,907,829,-105,-13),
-    mkRow("Diamond Collection","brand",1,118,98,121,-3,-3,442,589,481,-39,-8),
-    mkRow("The Wines of Francis Coppola","brand",1,5,3,3,2,67,18,20,20,-2,-10),
-    mkRow("Relax","brand",1,41,34,58,-17,-29,184,169,194,9,-5),
-    mkRow("Schmitt Sohne","brand",1,12,26,26,-14,-54,80,129,135,-55,-41),
-    mkRow("Transcendent Wines","total",0,2,2,4,-2,-55,9,9,10,-1,-10),
-    mkRow("Director's Cut","brand",1,2,2,4,-2,-55,9,9,10,-1,-10),
+    mkRow("Total DFW","total",0,0,0,0,0,0,0,0,0,0,0),
+    mkRow("Core Portfolio","brand",0,0,0,0,0,0,0,0,0,0,0),
+    mkRow("Core Glass","brand",0,0,0,0,0,0,0,0,0,0,0),
+    mkRow("Diamond Collection","brand",1,0,0,0,0,0,0,0,0,0,0),
+    mkRow("The Wines of Francis Coppola","brand",1,0,0,0,0,0,0,0,0,0,0),
+    mkRow("Relax","brand",1,0,0,0,0,0,0,0,0,0,0),
+    mkRow("Schmitt Sohne","brand",1,0,0,0,0,0,0,0,0,0,0),
+    mkRow("Transcendent Wines","total",0,0,0,0,0,0,0,0,0,0,0),
+    mkRow("Director's Cut","brand",1,0,0,0,0,0,0,0,0,0,0),
   ];
 }
 function mkRow(label,type,indent,mf,mp,lymtd,cc1,pl1,ytd,ytdp,lytd,cc2,pl2){
@@ -702,10 +705,11 @@ function renderAll(){
     </div>`;
   });
   const ytdGap = totalRow.ytdPlan - totalRow.ytd;
+  const gapColor = ytdGap <= 0 ? 'g' : 'r'; // ytd meets/exceeds plan = green, short of plan = red
   html += `<div class="bcard">
     <div class="bhead"><div class="bname">Portfolio Summary</div><div class="badge ${pctColor(ytdPct)==='g'?'green':pctColor(ytdPct)==='a'?'amber':'red'}">${ytdPct>=100?'On Plan':'Watch'}</div></div>
-    <div class="statrow">${totalRow.label} ${isMid?'Proj.':'Final'}: <b>${mtdPct}% of Plan</b></div>
-    <div class="statrow">YTD vs. Plan: <b>${ytdPct}% &nbsp;|&nbsp; ${ytdGap>=0?ytdGap+' case gap':Math.abs(ytdGap)+' cases ahead'}</b></div>
+    <div class="statrow">${totalRow.label} ${isMid?'Proj.':'Final'}: <b class="${pctColor(mtdPct)}">${mtdPct}% of Plan</b></div>
+    <div class="statrow">YTD vs. Plan: <b class="${pctColor(ytdPct)}">${ytdPct}%</b> &nbsp;|&nbsp; <b class="${gapColor}">${ytdGap>=0?ytdGap+' case gap':Math.abs(ytdGap)+' cases ahead'}</b></div>
     <div class="statrow">vs. LY (Month): <b class="${totalRow.mtdPctLY>=0?'g':'r'}">${fmtPct(totalRow.mtdPctLY)}</b></div>
     <div class="bcommentary" contenteditable="true" id="bc_summary"></div>
   </div>`;
