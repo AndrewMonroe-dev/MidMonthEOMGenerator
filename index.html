@@ -49,8 +49,10 @@ textarea{resize:vertical; min-height:60px;}
 .toggle-row button:not(.active){background:var(--lightgray); color:var(--text-muted);}
 
 .brand-row-editor{border:1px solid var(--border); border-radius:6px; padding:8px; margin-bottom:8px; background:#fdfcfa;}
-.brand-row-editor .rowtop{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;}
-.brand-row-editor .rowtop input[type=text]{font-weight:600; flex:1; margin-right:6px;}
+.brand-row-editor .rowtop{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; gap:4px;}
+.brand-row-editor .rowtop input[type=text]{font-weight:600; flex:1; margin-right:0;}
+.rowtop .btn.small{padding:4px 7px; flex-shrink:0;}
+.rowtop .btn.small:disabled{opacity:0.3; cursor:default;}
 .mini-grid{display:grid; grid-template-columns:repeat(5,1fr); gap:4px; margin-bottom:4px;}
 .mini-grid input{padding:6px 2px; font-size:12px; text-align:center; width:100%; min-width:0;}
 .mini-grid input::-webkit-outer-spin-button, .mini-grid input::-webkit-inner-spin-button{-webkit-appearance:none; margin:0;}
@@ -179,7 +181,7 @@ textarea{resize:vertical; min-height:60px;}
     <div class="section">
       <div class="section-head" onclick="toggleSection(this)">Paste Data From Sheet/Excel <span>▾</span></div>
       <div class="section-body">
-        <div class="hint">Copy your rows straight from the source table (tab-separated, one brand per line) and paste below. <b>You can paste the full table exactly as it appears.</b> The two "% Plan Achieved" columns are auto-detected and skipped, since those are recalculated here. Expected order: Label, Month Final, Month Plan, [%Plan], LYMTD, Case Chg, %Chg LY, YTD, YTD Plan, [%Plan], LYTD, Case Chg, %Chg LY.</div>
+        <div class="hint">Paste only the <b>brand/data rows</b> (brand name + numbers), one per line, tab-separated. <b>Do not include the column header row</b> (e.g. "Month Final, Month Plan, % Plan Achieved...") or the report's title row at the very top. Those get auto-detected and skipped if pasted anyway, but leaving them out is cleaner. You can copy the full data rows exactly as they appear, including both "% Plan Achieved" columns. Expected data order per row: Label, Month Final, Month Plan, [%Plan], LYMTD, Case Chg, %Chg LY, YTD, YTD Plan, [%Plan], LYTD, Case Chg, %Chg LY.</div>
         <textarea id="pasteBox" placeholder="Total DFW	100	100	100	0	0%	100	100	100	0	0%
 Core Portfolio	100	100	100	0	0%	100	100	100	0	0%
 ..."></textarea>
@@ -361,6 +363,8 @@ function renderBrandEditor(){
     div.innerHTML = `
       <div class="rowtop">
         <input type="text" value="${row.label}" onchange="updateRow(${i},'label',this.value)">
+        <button class="btn small outline" onclick="moveRow(${i},-1)" ${i===0?'disabled':''} title="Move up">&#9650;</button>
+        <button class="btn small outline" onclick="moveRow(${i},1)" ${i===state.rows.length-1?'disabled':''} title="Move down">&#9660;</button>
         <button class="btn small danger" onclick="removeRow(${i})">✕</button>
       </div>
       <div class="mini-grid">
@@ -422,6 +426,13 @@ function updateRow(i, field, val){
   renderAll();
 }
 function removeRow(i){ state.rows.splice(i,1); renderBrandEditor(); renderAll(); }
+function moveRow(i, dir){
+  const j = i + dir;
+  if(j < 0 || j >= state.rows.length) return;
+  [state.rows[i], state.rows[j]] = [state.rows[j], state.rows[i]];
+  renderBrandEditor();
+  renderAll();
+}
 function addBrandRow(){
   state.rows.push(mkRow("New Brand","brand",1,0,0,0,0,0,0,0,0,0,0));
   renderBrandEditor(); renderAll();
@@ -445,6 +456,19 @@ function parsePastedData(){
   lines.forEach(line => {
     const cells = line.split('\t').map(c => c.trim());
     const label = cells[0];
+
+    // Header-row guard: a real data cell (numbers, parens, %, commas, minus)
+    // never contains letters. A header cell like "Month Final" or "% Plan
+    // Achieved" almost always does. If most of the would-be numeric cells
+    // contain letters, this line is a header/label row, not data, so skip
+    // it rather than silently parsing it into a garbage all-zero row.
+    const dataCells = cells.slice(1);
+    const alphaCount = dataCells.filter(c => /[a-zA-Z]/.test(c)).length;
+    if(dataCells.length > 0 && alphaCount > dataCells.length / 2){
+      skipped++;
+      return;
+    }
+
     // Data columns after the label:
     //   FULL table (straight from your report) = 12 cols, includes the two
     //     "% Plan Achieved" columns at positions 3 (Month) and 9 (YTD).
@@ -486,7 +510,7 @@ function parsePastedData(){
     if(status){
       const fmtNote = format12 ? `Detected full ${format12}-row table (auto-skipped the two "% Plan Achieved" columns).`
                     : `Detected trimmed table format.`;
-      status.textContent = `✓ Parsed ${newRows.length} rows. ${fmtNote}` + (skipped ? ` ${skipped} line(s) skipped (too few columns).` : '');
+      status.textContent = `✓ Parsed ${newRows.length} rows. ${fmtNote}` + (skipped ? ` ${skipped} line(s) skipped (too few columns, or looked like a header row).` : '');
       setTimeout(() => { if(status.textContent.startsWith('✓')) status.textContent=''; }, 8000);
     }
   } else if(status){
@@ -604,7 +628,11 @@ function renderInitEditor(){
     div.innerHTML = `
       <input type="text" value="${init.brand}" placeholder="Brand / Focus Area" onchange="updateInit(${i},'brand',this.value)">
       <textarea placeholder="Detail (leave blank to fill in report)" onchange="updateInit(${i},'detail',this.value)">${init.detail}</textarea>
-      <button class="btn small danger" onclick="removeInit(${i})">Remove</button>
+      <div style="display:flex; gap:4px;">
+        <button class="btn small outline" onclick="moveInit(${i},-1)" ${i===0?'disabled':''} title="Move up">&#9650;</button>
+        <button class="btn small outline" onclick="moveInit(${i},1)" ${i===state.initiatives.length-1?'disabled':''} title="Move down">&#9660;</button>
+        <button class="btn small danger" onclick="removeInit(${i})">Remove</button>
+      </div>
     `;
     body.appendChild(div);
   });
@@ -614,6 +642,15 @@ function removeInit(i){
   flushInitiativeEditsToState();      // save any live-typed text into state by name first
   state.initiatives.splice(i,1);
   editableStore.initDetail = {};      // positions shifted for everything after i, old cache invalid
+  renderInitEditor();
+  renderAll();
+}
+function moveInit(i, dir){
+  flushInitiativeEditsToState();      // save any live-typed text into state by name first
+  const j = i + dir;
+  if(j < 0 || j >= state.initiatives.length) return;
+  [state.initiatives[i], state.initiatives[j]] = [state.initiatives[j], state.initiatives[i]];
+  editableStore.initDetail = {};      // positions just changed, old cache invalid
   renderInitEditor();
   renderAll();
 }
@@ -699,6 +736,7 @@ function renderAll(){
 
   const isMid = state.reportType === 'mid';
   const totalRow = state.rows.find(r => r.type === 'total') || state.rows[0];
+  lastTotalRow = totalRow;
 
   const mtdPct = pctAchieved(totalRow.mtdFinal, totalRow.mtdPlan);
   const ytdPct = pctAchieved(totalRow.ytd, totalRow.ytdPlan);
@@ -747,6 +785,7 @@ function renderAll(){
 
   html += `<div class="seclabel">Brand-Level Notes</div><div class="brandgrid">`;
   const brandRows = state.rows.filter(r => r !== totalRow);
+  lastBrandRows = brandRows;
   brandRows.forEach((row, idx) => {
     const mtdP = pctAchieved(row.mtdFinal, row.mtdPlan);
     const ytdP = pctAchieved(row.ytd, row.ytdPlan);
@@ -757,7 +796,7 @@ function renderAll(){
       <div class="statrow">${isMid?'Proj.':'Month'} vs. Plan: <b class="${pctColor(mtdP)}">${mtdP}%</b></div>
       <div class="statrow">vs. LY: <b class="${row.mtdPctLY>=0?'g':'r'}">${fmtPct(row.mtdPctLY)} (${fmtNum(row.mtdCaseChg)} cases)</b></div>
       <div class="statrow">YTD vs. Plan: <b class="${pctColor(ytdP)}">${ytdP}%</b></div>
-      <div class="bcommentary" contenteditable="true" id="bc_${idx}"></div>
+      <div class="bcommentary" contenteditable="true" id="bc_${idx}">${row.commentary || ''}</div>
     </div>`;
   });
   const ytdGap = totalRow.ytdPlan - totalRow.ytd;
@@ -767,7 +806,7 @@ function renderAll(){
     <div class="statrow">${totalRow.label} ${isMid?'Proj.':'Final'}: <b class="${pctColor(mtdPct)}">${mtdPct}% of Plan</b></div>
     <div class="statrow">YTD vs. Plan: <b class="${pctColor(ytdPct)}">${ytdPct}%</b> &nbsp;|&nbsp; <b class="${gapColor}">${ytdGap>=0?ytdGap+' case gap':Math.abs(ytdGap)+' cases ahead'}</b></div>
     <div class="statrow">vs. LY (Month): <b class="${totalRow.mtdPctLY>=0?'g':'r'}">${fmtPct(totalRow.mtdPctLY)}</b></div>
-    <div class="bcommentary" contenteditable="true" id="bc_summary"></div>
+    <div class="bcommentary" contenteditable="true" id="bc_summary">${totalRow.commentary || ''}</div>
   </div>`;
   html += `</div>`;
 
@@ -806,6 +845,8 @@ function defaultGreeting(isMid, month, half, halfPct, ytdPct, distName){
 }
 
 let editableStore = {greeting:'', kpiC:['','',''], brandCommentary:{}, initDetail:{}};
+let lastBrandRows = [];   // the exact row objects rendered as cards on the last renderAll(), in order
+let lastTotalRow = null;  // the row object used for the Portfolio Summary card on the last render
 
 function attachEditableListeners(){
   const g = document.getElementById('greetingEl');
@@ -816,9 +857,17 @@ function attachEditableListeners(){
     if(el) el.addEventListener('input', () => editableStore.kpiC[i] = el.innerHTML);
   });
 
-  document.querySelectorAll('.bcommentary').forEach(el => {
-    el.addEventListener('input', () => editableStore.brandCommentary[el.id] = el.innerHTML);
+  // Brand card commentary binds to the actual row OBJECT, not a position id.
+  // Since renderAll() always renders row.commentary directly into the card,
+  // this needs no separate restore step, and it stays correctly attached to
+  // its brand even if rows get reordered.
+  lastBrandRows.forEach((row, idx) => {
+    const el = document.getElementById('bc_' + idx);
+    if(el) el.addEventListener('input', () => { row.commentary = el.innerHTML; });
   });
+  const summaryEl = document.getElementById('bc_summary');
+  if(summaryEl && lastTotalRow) summaryEl.addEventListener('input', () => { lastTotalRow.commentary = summaryEl.innerHTML; });
+
   document.querySelectorAll('.initcontent .id').forEach(el => {
     el.addEventListener('input', () => editableStore.initDetail[el.id] = el.innerHTML);
   });
@@ -832,10 +881,6 @@ function restoreEditableFields(){
     if(el && editableStore.kpiC[i]) el.innerHTML = editableStore.kpiC[i];
   });
 
-  Object.keys(editableStore.brandCommentary).forEach(id => {
-    const el = document.getElementById(id);
-    if(el) el.innerHTML = editableStore.brandCommentary[id];
-  });
   Object.keys(editableStore.initDetail).forEach(id => {
     const el = document.getElementById(id);
     if(el) el.innerHTML = editableStore.initDetail[id];
@@ -895,6 +940,26 @@ function saveState(){
 function applyLoadedPayload(payload){
   state = payload.state;
   editableStore = payload.editableStore || {greeting:'', kpiC:['','',''], brandCommentary:{}, initDetail:{}};
+
+  // Backward compatibility: files saved before brand commentary lived on
+  // the row object itself stored it positionally in editableStore.brandCommentary
+  // (bc_0, bc_1..., bc_summary). Map those onto the matching rows now, in
+  // the same order they were in at save time, then discard the old cache
+  // so it doesn't sit around unused.
+  if(editableStore.brandCommentary && Object.keys(editableStore.brandCommentary).length){
+    const totalRowAtLoad = state.rows.find(r => r.type === 'total') || state.rows[0];
+    const brandRowsAtLoad = state.rows.filter(r => r !== totalRowAtLoad);
+    Object.keys(editableStore.brandCommentary).forEach(key => {
+      if(key === 'bc_summary'){
+        totalRowAtLoad.commentary = editableStore.brandCommentary[key];
+      } else {
+        const idx = parseInt(key.replace('bc_',''), 10);
+        if(!isNaN(idx) && brandRowsAtLoad[idx]) brandRowsAtLoad[idx].commentary = editableStore.brandCommentary[key];
+      }
+    });
+    editableStore.brandCommentary = {};
+  }
+
   document.getElementById('distributorInp').value = state.distributorName || '';
   document.getElementById('monthSel').value = state.month;
   document.getElementById('yearInp').value = state.year;
